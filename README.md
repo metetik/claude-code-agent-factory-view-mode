@@ -33,7 +33,7 @@ three sizes, each with pictures of its own: **large** in half blocks, two square
 cell (agents 8 cells wide); **medium**, the default, and **small** in quarter blocks, 2x2
 pixels a cell (agents 6 and 4 cells wide), the same mascot, hats and extras drawn in fewer
 pixels, and the bubble showing the tool by its color. A 3x3 floor takes 66, 54 or 42
-columns, the smaller two with more floor between the desks. Claude Code Desktop and the mobile app draw the floor as an animated SVG with room
+columns, with 6 columns and 3 rows of floor between the desks at every size. Claude Code Desktop and the mobile app draw the floor as an animated SVG with room
 between the desks, scaled by the same size; hover a desk there for what that agent is
 doing. **Size** under the legend, or `/factory-view size`, switches between them.
 

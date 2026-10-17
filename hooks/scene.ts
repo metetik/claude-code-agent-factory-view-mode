@@ -97,7 +97,7 @@ function spacingOf(spacing: Spacing, art: Art): { gapX: number; gapY: number; ma
   if (spacing === 'roomy') return { gapX: 10, gapY: 6, margin: 8, bottom: 6 }
   if (DESKS[art].isQuad) return { gapX: 12, gapY: 6, margin: 6, bottom: 2 }
 
-  return { gapX: art === 'large' ? 6 : 4, gapY: 2, margin: 3, bottom: 2 }
+  return art === 'large' ? { gapX: 6, gapY: 6, margin: 3, bottom: 2 } : { gapX: 4, gapY: 2, margin: 3, bottom: 2 }
 }
 /** Frames in one loop of every animation; the SVG plays them at 4 a second. */
 export const FRAMES = 8
