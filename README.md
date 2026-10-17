@@ -9,11 +9,12 @@
 
 <img src="docs/factory.gif" alt="Claude hands out work: subagents take the desks around it, type away with their tools in thought bubbles, finish with a green check and doze off" width="564">
 
-[Install](#-install) · [What you see](#-what-you-see) · [Three sizes](#-three-sizes) · [Dress them up](#-dress-them-up) · [Commands](#%EF%B8%8F-commands)
+[Install](#-install) · [What you see](#-what-you-see) · [Three sizes](#-three-sizes) · [Dress them up](#-dress-them-up) · [Commands](#%EF%B8%8F-commands) · [FAQ](#-faq)
 
 </div>
 
-When Claude orchestrates, a lot happens at once and most of it is out of sight. Factory View
+Factory View is a Claude Code mod that visualizes multi-agent orchestration. When Claude
+works with subagents, a lot happens at once and most of it is out of sight; Factory View
 turns it into a little office in a pane beside the conversation. Claude, the main agent, is
 the manager at the gilded desk in the middle of the floor; every subagent it starts takes a
 desk of its own around it. Agents at work type away while their monitor scrolls and a
@@ -114,6 +115,41 @@ are remembered across sessions.
 | `/factory-view size small\|medium\|large` | how big the agents are drawn |
 | `/factory-view clear` | send finished agents home |
 | `/factory-view options` | list the colors, hats and extras |
+
+## 🔒 Privacy
+
+Factory View runs entirely inside Claude Code. It makes no network requests, calls no model,
+runs no commands and sends no telemetry. It reads the session's own agent and tool events
+(which agent runs which tool, and a few words of that tool's input, such as a file name or
+the start of a command) to draw them, keeps them in the session's memory, and saves only the
+looks and settings you choose, in Claude Code's plugin store on your machine.
+
+## ❓ FAQ
+
+**How do I see what my Claude Code subagents are doing?**
+Install Factory View and the pane opens beside the conversation. Every subagent gets a desk,
+its thought bubble shows the kind of tool it runs, and the legend under the floor names the
+tool and what it works on, for every agent at once.
+
+**Does it work in Claude Code Desktop and the mobile app?**
+Yes. The terminal draws the floor in block characters; Claude Code Desktop and the mobile
+app draw it as an animated SVG, with hover text on each desk.
+
+**Does it slow Claude down or cost tokens?**
+No. It adds nothing to the prompt and makes no model calls; it only watches the events the
+session already has.
+
+**Does it work with agent teams and background agents?**
+Yes. Teammates and background agents get desks like any subagent; a teammate waiting for a
+message looks around, then dozes off.
+
+**Which Claude Code version do I need?**
+Factory View is a mod, built on function hooks, which are early access; it was made and
+tested on Claude Code 2.1.302. Installing with `/plugin install … --marketplace` in a
+session needs 2.1.275 or later, and from the shell 2.1.292 or later.
+
+**Is this an official Anthropic project?**
+No. Factory View is a community mod and is not affiliated with Anthropic.
 
 ## 🔧 How it works
 

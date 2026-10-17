@@ -1,0 +1,24 @@
+# Factory View
+
+> Factory View is a Claude Code mod (a plugin built on Claude Code's function hooks) that visualizes multi-agent orchestration: Claude and its subagents appear as pixel-art mascots working at desks in an office, in a pane beside the conversation. It draws in the terminal with half- and quarter-block characters, and in Claude Code Desktop and the mobile app as an animated SVG.
+
+Install it from a Claude Code session with `/plugin install factory-view --marketplace metetik/claude-code-agent-factory-view-mode`, then run `/factory-view demo` to see six pretend agents at work.
+
+- The main agent sits at the manager's desk in the middle; each subagent, teammate or background agent takes a desk around it.
+- Each agent shows its state: working (a bubble names the kind of tool it runs), waiting, sleeping, done or failed. A legend lists every agent's current tool and what it works on.
+- Agents can be dressed up: 14 colors, 18 hats and 8 extras, for one agent or a whole subagent type; agents nobody dressed get random looks.
+- Three sizes for the terminal: small, medium (default) and large. Everything is controlled from the pane or with `/factory-view`.
+- It runs locally: no network requests, no model calls, no telemetry, nothing added to the prompt.
+
+## Docs
+
+- [README](https://github.com/metetik/claude-code-agent-factory-view-mode/blob/main/README.md): install, what each picture means, sizes, dressing up, commands, privacy, FAQ
+- [Plugin manifest](https://github.com/metetik/claude-code-agent-factory-view-mode/blob/main/.claude-plugin/plugin.json): name, version, metadata
+- [Marketplace](https://github.com/metetik/claude-code-agent-factory-view-mode/blob/main/.claude-plugin/marketplace.json): the marketplace this repository serves
+
+## Source
+
+- [hooks/register.tsx](https://github.com/metetik/claude-code-agent-factory-view-mode/blob/main/hooks/register.tsx): the hooks module: session events, the pane, the `/factory-view` command, the animation
+- [hooks/model.ts](https://github.com/metetik/claude-code-agent-factory-view-mode/blob/main/hooks/model.ts): agents, desks, status changes and styles
+- [hooks/scene.ts](https://github.com/metetik/claude-code-agent-factory-view-mode/blob/main/hooks/scene.ts): the floor plan and the pixel painter
+- [tests/factory.test.ts](https://github.com/metetik/claude-code-agent-factory-view-mode/blob/main/tests/factory.test.ts): tests run with `claude plugin test .`

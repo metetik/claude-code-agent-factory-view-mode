@@ -1,9 +1,30 @@
 {
   "name": "factory-view",
+  "displayName": "Factory View",
   "version": "0.1.0",
-  "description": "Watch Claude and its subagents work at their desks on a pixel-art factory floor, and dress them up.",
+  "description": "A pixel-art office for Claude Code: watch Claude and its subagents work at their desks, and dress them up.",
   "author": {
-    "name": "metetik"
+    "name": "metetik",
+    "url": "https://github.com/metetik"
   },
+  "homepage": "https://github.com/metetik/claude-code-agent-factory-view-mode#readme",
+  "repository": "https://github.com/metetik/claude-code-agent-factory-view-mode",
+  "keywords": [
+    "subagents",
+    "multi-agent",
+    "agent-orchestration",
+    "visualization",
+    "pixel-art",
+    "terminal-ui",
+    "tui",
+    "dashboard",
+    "mod",
+    "mascot",
+    "agent-status",
+    "fun"
+  ],
+  "icon": "./docs/icon.png",
+  "documentationUrl": "https://github.com/metetik/claude-code-agent-factory-view-mode#readme",
+  "supportUrl": "https://github.com/metetik/claude-code-agent-factory-view-mode/issues",
   "types": "./types/index.d.ts"
 }

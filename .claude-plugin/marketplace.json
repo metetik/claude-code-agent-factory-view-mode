@@ -2,13 +2,30 @@
   "name": "factory-view",
   "description": "Factory View, a Claude Code mod: a pixel-art office where Claude and its subagents work at their desks.",
   "owner": {
-    "name": "metetik"
+    "name": "metetik",
+    "url": "https://github.com/metetik"
   },
   "plugins": [
     {
       "name": "factory-view",
       "source": "./",
-      "description": "Watch Claude and its subagents work at their desks on a pixel-art factory floor, and dress them up."
+      "displayName": "Factory View",
+      "description": "A pixel-art office for Claude Code: watch Claude and its subagents work at their desks, and dress them up.",
+      "category": "visualization",
+      "tags": [
+        "subagents",
+        "multi-agent",
+        "agent-orchestration",
+        "visualization",
+        "pixel-art",
+        "terminal-ui",
+        "tui",
+        "dashboard",
+        "mod",
+        "mascot",
+        "agent-status",
+        "fun"
+      ]
     }
   ]
 }
