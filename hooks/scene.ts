@@ -68,11 +68,20 @@ export type SceneAgent = { agent: FactoryAgent; style: AgentStyle }
 
 export const STATION_W = 22
 export const STATION_H = 22
-const GAP_X = 2
 const WALL_H = 10
 const FLAT_WALL_H = 2
-const MARGIN_X = 3
-const MARGIN_BOTTOM = 2
+
+/**
+ * Floor between the desks: snug on the terminal, where a pixel is a cell,
+ * roomy where the picture is scaled. Vertical gaps stay even, so the name
+ * tags keep to whole terminal rows.
+ */
+export type Spacing = 'snug' | 'roomy'
+
+const SPACINGS: Record<Spacing, { gapX: number; gapY: number; margin: number; bottom: number }> = {
+  snug: { gapX: 4, gapY: 2, margin: 3, bottom: 2 },
+  roomy: { gapX: 10, gapY: 6, margin: 8, bottom: 6 },
+}
 /** Frames in one loop of every animation; the SVG plays them at 4 a second. */
 export const FRAMES = 8
 
@@ -81,20 +90,25 @@ export type Layout = {
   rows: number
   /** Pixel rows of wall above the desks. */
   wall: number
+  spacing: Spacing
   /** Cell of each seat: seat 0, the manager's, sits in the middle. */
   cells: { col: number; row: number }[]
   width: number
   height: number
 }
 
-/** The widest a layout of `maxCols` desks across may be, in pixels. */
-export function sceneWidth(cols: number): number {
-  return MARGIN_X * 2 + cols * STATION_W + (cols - 1) * GAP_X
+/** How wide `cols` desks across are, in pixels. */
+export function sceneWidth(cols: number, spacing: Spacing = 'snug'): number {
+  const { gapX, margin } = SPACINGS[spacing]
+
+  return margin * 2 + cols * STATION_W + (cols - 1) * gapX
 }
 
 /** How many desks fit across `width` pixels. */
-export function colsFor(width: number): number {
-  return Math.max(1, Math.floor((width - MARGIN_X * 2 + GAP_X) / (STATION_W + GAP_X)))
+export function colsFor(width: number, spacing: Spacing = 'snug'): number {
+  const { gapX, margin } = SPACINGS[spacing]
+
+  return Math.max(1, Math.floor((width - margin * 2 + gapX) / (STATION_W + gapX)))
 }
 
 /**
@@ -103,7 +117,11 @@ export function colsFor(width: number): number {
  * `isFlat` spends width before height and lowers the wall, for a pane above
  * the prompt.
  */
-export function layout(seatCount: number, maxCols: number, isFlat = false): Layout {
+export function layout(
+  seatCount: number,
+  maxCols: number,
+  { isFlat = false, spacing = 'snug' }: { isFlat?: boolean; spacing?: Spacing } = {},
+): Layout {
   let cols: number
   let rows: number
   let cells: { col: number; row: number }[]
@@ -152,14 +170,16 @@ export function layout(seatCount: number, maxCols: number, isFlat = false): Layo
   }
 
   const wall = isFlat ? FLAT_WALL_H : WALL_H
+  const { gapY, bottom } = SPACINGS[spacing]
 
   return {
     cols,
     rows,
     wall,
+    spacing,
     cells,
-    width: sceneWidth(cols),
-    height: wall + rows * STATION_H + MARGIN_BOTTOM,
+    width: sceneWidth(cols, spacing),
+    height: wall + rows * STATION_H + (rows - 1) * gapY + bottom,
   }
 }
 
@@ -167,7 +187,9 @@ export function stationOrigin(lay: Layout, seat: number): { x: number; y: number
   const cell = lay.cells[seat]
   if (cell === undefined) return undefined
 
-  return { x: MARGIN_X + cell.col * (STATION_W + GAP_X), y: lay.wall + cell.row * STATION_H }
+  const { gapX, gapY, margin } = SPACINGS[lay.spacing]
+
+  return { x: margin + cell.col * (STATION_W + gapX), y: lay.wall + cell.row * (STATION_H + gapY) }
 }
 
 /** A small number per agent, so desks side by side do not move in step. */

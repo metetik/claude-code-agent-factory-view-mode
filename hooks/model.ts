@@ -1,4 +1,4 @@
-import type { AccessoryName, AgentStatus, AgentStyle, ColorName, FactoryAgent, HatName } from '../types'
+import type { AccessoryName, AgentStatus, AgentStyle, ColorName, FactoryAgent, HatName, LooksMode } from '../types'
 import { ACCESSORY_NAMES, COLOR_NAMES, HAT_NAMES } from './sprites'
 
 export const MAIN_ID = 'main'
@@ -121,13 +121,27 @@ export function clearFinished(agents: readonly FactoryAgent[]): FactoryAgent[] {
   return agents.filter(a => !isFinished(a))
 }
 
-/** Where an agent's style is kept: one style per subagent type, one for the manager. */
-export function styleKey(agent: Pick<FactoryAgent, 'isMain' | 'type'>): string {
-  return agent.isMain ? 'main' : `type:${agent.type}`
+/**
+ * Whom a style choice is for: this one agent, or every agent of its type (the
+ * manager is one of a kind either way).
+ */
+export type StyleScope = 'agent' | 'type'
+
+/** Where a style is kept: `agent:<id>` for one agent, `type:<type>` for a type, `main` for the manager. */
+export function styleKey(agent: Pick<FactoryAgent, 'id' | 'isMain' | 'type'>, scope: StyleScope): string {
+  if (agent.isMain) return 'main'
+
+  return scope === 'agent' ? `agent:${agent.id}` : `type:${agent.type}`
 }
 
+/** Choices worth keeping past the session: an agent's own id is not seen again. */
+export function lastingStyles(styles: Record<string, AgentStyle>): Record<string, AgentStyle> {
+  return Object.fromEntries(Object.entries(styles).filter(([key]) => !key.startsWith('agent:')))
+}
+
+const MANAGER: AgentStyle = { color: 'clay', hat: 'crown', accessory: 'tie' }
+
 const KNOWN: Record<string, AgentStyle> = {
-  main: { color: 'clay', hat: 'crown', accessory: 'tie' },
   Explore: { color: 'sky', hat: 'explorer', accessory: 'none' },
   'general-purpose': { color: 'mint', hat: 'hardhat', accessory: 'none' },
   Plan: { color: 'grape', hat: 'wizard', accessory: 'glasses' },
@@ -146,41 +160,60 @@ function hash(text: string): number {
   return h
 }
 
-/** A look of its own for every agent type, the same every session. */
-export function defaultStyle(agent: Pick<FactoryAgent, 'isMain' | 'type'>): AgentStyle {
-  const known = KNOWN[agent.isMain ? 'main' : agent.type]
-  if (known !== undefined) return known
-  const h = hash(agent.type)
-  const colors = COLOR_NAMES.filter(c => c !== 'clay')
-  const hats = HAT_NAMES.filter(name => name !== 'none' && name !== 'crown')
-  const extras = ACCESSORY_NAMES
+/** The manager's color and crown stay the manager's: nobody else draws them by chance. */
+const CHANCE_COLORS = COLOR_NAMES.filter(c => c !== 'clay')
+const CHANCE_HATS = HAT_NAMES.filter(name => name !== 'crown')
+
+/** A look drawn by lot from `seed`: the same seed, the same look. */
+export function randomStyle(seed: string | number): AgentStyle {
+  const h = hash(String(seed))
+  const extras = ACCESSORY_NAMES.filter(name => name !== 'none')
 
   return {
-    color: colors[h % colors.length]!,
-    hat: hats[(h >>> 8) % hats.length]!,
-    accessory: (h >>> 16) % 3 === 0 ? extras[(h >>> 20) % extras.length]! : 'none',
+    color: CHANCE_COLORS[h % CHANCE_COLORS.length]!,
+    hat: CHANCE_HATS[(h >>> 8) % CHANCE_HATS.length]!,
+    accessory: (h >>> 16) % 2 === 0 ? 'none' : extras[(h >>> 20) % extras.length]!,
   }
 }
 
-export function styleOf(agent: Pick<FactoryAgent, 'isMain' | 'type'>, styles: Record<string, AgentStyle>): AgentStyle {
-  return styles[styleKey(agent)] ?? defaultStyle(agent)
+/** A look of its own for every agent type, the same every session. */
+export function typeStyle(type: string): AgentStyle {
+  return KNOWN[type] ?? randomStyle(`type:${type}`)
+}
+
+/**
+ * How an agent looks before anyone picks: the manager as the manager; the
+ * others by lot, each its own (`random`), or dressed for their type (`type`).
+ */
+export function defaultStyle(agent: Pick<FactoryAgent, 'id' | 'isMain' | 'type'>, looks: LooksMode = 'random'): AgentStyle {
+  if (agent.isMain) return MANAGER
+
+  return looks === 'random' ? randomStyle(`agent:${agent.id}`) : typeStyle(agent.type)
+}
+
+/** The look chosen for this agent, else for its type, else its default. */
+export function styleOf(
+  agent: Pick<FactoryAgent, 'id' | 'isMain' | 'type'>,
+  styles: Record<string, AgentStyle>,
+  looks: LooksMode = 'random',
+): AgentStyle {
+  return styles[styleKey(agent, 'agent')] ?? styles[styleKey(agent, 'type')] ?? defaultStyle(agent, looks)
+}
+
+/** What a scope shows before a choice is made there: the type's look for a type, the agent's own for an agent. */
+export function baseStyle(
+  agent: Pick<FactoryAgent, 'id' | 'isMain' | 'type'>,
+  scope: StyleScope,
+  styles: Record<string, AgentStyle>,
+  looks: LooksMode,
+): AgentStyle {
+  return scope === 'agent' ? styleOf(agent, styles, looks) : (styles[styleKey(agent, 'type')] ?? defaultStyle(agent, looks))
 }
 
 export function cycle<T>(list: readonly T[], current: T, step = 1): T {
   const at = list.indexOf(current)
 
   return list[(at + step + list.length) % list.length]!
-}
-
-export function randomStyle(seed: number): AgentStyle {
-  const pick = <T>(list: readonly T[], n: number) => list[Math.abs(n) % list.length]!
-  const h = hash(String(seed))
-
-  return {
-    color: pick(COLOR_NAMES, h),
-    hat: pick(HAT_NAMES, h >>> 7),
-    accessory: pick(ACCESSORY_NAMES, h >>> 15),
-  }
 }
 
 export type StyleField = 'color' | 'hat' | 'accessory'

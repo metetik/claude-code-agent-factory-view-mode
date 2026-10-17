@@ -48,15 +48,15 @@ for (let i = 1; i <= count; i++) {
   const [type, status, tool, outcome] = kinds[(i - 1) % kinds.length]!
   agents.push(agent(`a${i}`, i, type, status, tool, outcome))
 }
-const sceneAgents: SceneAgent[] = agents.map(a => ({ agent: a, style: defaultStyle(a) }))
+const sceneAgents: SceneAgent[] = agents.map(a => ({ agent: a, style: defaultStyle(a, 'random') }))
 
-const lay = layout(seatsNeeded(sceneAgents), maxCols)
+const lay = layout(seatsNeeded(sceneAgents), maxCols, { spacing: 'roomy' })
 const frames = Array.from({ length: FRAMES }, (_, f) => drawScene(lay, sceneAgents, f))
 const labels = sceneLabels(lay, sceneAgents, 10)
-const svg = sceneSvg(frames, labels, sceneHotspots(lay, sceneAgents, a => a.label), { scale: 5, secondsPerFrame: 0.25 })
+const svg = sceneSvg(frames, labels, sceneHotspots(lay, sceneAgents, a => a.label), { scale: 3, secondsPerFrame: 0.25 })
 writeFileSync(join(out, 'factory.svg'), svg)
 for (const f of [0, 1]) {
-  const still = sceneSvg([frames[f]!], labels, [], { scale: 6, secondsPerFrame: 0.25 })
+  const still = sceneSvg([frames[f]!], labels, [], { scale: 3, secondsPerFrame: 0.25 })
   writeFileSync(join(out, `factory-frame${f}.svg`), still)
 }
 

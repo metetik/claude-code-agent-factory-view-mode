@@ -82,14 +82,20 @@ export type AccessoryName =
 /** How one agent (or every agent of one type) looks. */
 export type AgentStyle = { color: ColorName; hat: HatName; accessory: AccessoryName }
 
+/** How agents nobody styled look: each its own by lot, or dressed for their type. */
+export type LooksMode = 'random' | 'type'
+
 declare module 'claude-code' {
   interface PluginState {
     'agent-factory': {
       agents: FactoryAgent[]
-      /** Keyed by `main` or `type:<subagent type>`. */
+      /** Keyed by `main`, `type:<subagent type>` or `agent:<agent id>`. */
       styles: Record<string, AgentStyle>
+      looks: LooksMode
       /** The agent whose style the pane is editing. */
       selected: string | null
+      /** Whether the pane's style controls dress the picked agent alone or its whole type. */
+      scope: 'agent' | 'type'
       isDemo: boolean
     }
   }

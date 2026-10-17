@@ -2,7 +2,18 @@ import { describe, expect, mock, test } from 'claude-code/testing'
 import type { AgentInfo, On } from 'claude-code'
 
 import type { FactoryAgent } from '../types'
-import { addAgent, clearFinished, mainAgent, parseStyle, settle, DONE_DOZE_MS, MAIN_DOZE_MS } from '../hooks/model'
+import {
+  addAgent,
+  clearFinished,
+  defaultStyle,
+  mainAgent,
+  parseStyle,
+  randomStyle,
+  settle,
+  styleOf,
+  DONE_DOZE_MS,
+  MAIN_DOZE_MS,
+} from '../hooks/model'
 import { drawScene, layout, stationOrigin } from '../hooks/scene'
 import { rasterCells, sceneSvg, SVG_LIMIT } from '../hooks/paint'
 
@@ -46,7 +57,7 @@ describe('the floor plan', () => {
   })
 
   test('a flat pane spends width before height', () => {
-    expect(layout(7, 7, true).rows).toBe(1)
+    expect(layout(7, 7, { isFlat: true }).rows).toBe(1)
     expect(layout(7, 7).rows).toBe(3)
   })
 
@@ -82,6 +93,28 @@ describe('the agents', () => {
     const later = settle(agents, MAIN_DOZE_MS + DONE_DOZE_MS) ?? []
     expect(later.map(a => a.status)).toEqual(['sleeping', 'sleeping'])
     expect(clearFinished(later).map(a => a.id)).toEqual(['main'])
+  })
+
+  test('undressed agents draw a look of their own by lot, or dress for their type', () => {
+    const one = { id: 'agent-1', isMain: false, type: 'Explore' }
+    const two = { id: 'agent-2', isMain: false, type: 'Explore' }
+    expect(defaultStyle(one, 'random')).toEqual(defaultStyle(one, 'random'))
+    expect(defaultStyle(one, 'random')).not.toEqual(defaultStyle(two, 'random'))
+    expect(defaultStyle(one, 'type')).toEqual(defaultStyle(two, 'type'))
+    expect(defaultStyle(mainAgent(0), 'random')).toEqual({ color: 'clay', hat: 'crown', accessory: 'tie' })
+    for (let seed = 0; seed < 300; seed++) {
+      const style = randomStyle(seed)
+      expect(style.color).not.toBe('clay')
+      expect(style.hat).not.toBe('crown')
+    }
+  })
+
+  test("an agent's own look wins over its type's, and its type's over the default", () => {
+    const one = { id: 'agent-1', isMain: false, type: 'Explore' }
+    const viking = { color: 'snow', hat: 'viking', accessory: 'none' } as const
+    const chef = { color: 'sun', hat: 'chef', accessory: 'mustache' } as const
+    expect(styleOf(one, { 'type:Explore': chef })).toEqual(chef)
+    expect(styleOf(one, { 'type:Explore': chef, 'agent:agent-1': viking })).toEqual(viking)
   })
 
   test('style words parse, and an unknown one is named', () => {
@@ -179,20 +212,73 @@ describe('the pane', () => {
     }
   })
 
-  test('picking an agent shows its style, and Color moves to the next one', async ($, on) => {
+  test('picking an agent lets you choose its color, hat and extra from lists', async ($, on) => {
     engine(on, [])
     for (const surface of ['terminal', 'desktop'] as const) {
       const ui = await $.ui.mount({ ...PANE, surface })
       await ui.press({ key: 'agent-main' })
-      const before = (await ui.find({ key: 'style-color' }))?.props.label
-      await ui.press({ key: 'style-color' })
-      const after = (await ui.find({ key: 'style-color' }))?.props.label
-      expect(before).not.toBe(after)
+      expect((await ui.find({ key: 'pick-color' }))?.props.value).toBe('clay')
+      await ui.select({ key: 'pick-color', value: 'sky' })
+      await ui.select({ key: 'pick-hat', value: 'wizard' })
+      expect((await ui.find({ key: 'pick-color' }))?.props.value).toBe('sky')
+      expect((await ui.find({ key: 'pick-hat' }))?.props.value).toBe('wizard')
       await ui.press({ key: 'style-reset' })
-      expect((await ui.find({ key: 'style-color' }))?.props.label).toBe('Color: clay')
+      expect((await ui.find({ key: 'pick-color' }))?.props.value).toBe('clay')
       await ui.press({ key: 'style-done' })
-      expect(await ui.find({ key: 'style-color' })).toBeUndefined()
+      expect(await ui.find({ key: 'pick-color' })).toBeUndefined()
       await ui.unmount()
     }
+  })
+
+  test('mobile, with no lists, steps through the choices with buttons', async ($, on) => {
+    engine(on, [])
+    const ui = await $.ui.mount({ ...PANE, surface: 'mobile' })
+    await ui.press({ key: 'agent-main' })
+    expect((await ui.find({ key: 'style-color' }))?.props.label).toBe('Color: clay')
+    await ui.press({ key: 'style-color' })
+    expect((await ui.find({ key: 'style-color' }))?.props.label).toBe('Color: tangerine')
+    await ui.unmount()
+  })
+
+  test('a look goes to the picked agent alone, or to every agent of its type', async ($, on) => {
+    engine(on, [
+      explorer,
+      { id: 'agent-2', description: 'Find the tests', type: 'Explore', status: 'running' },
+    ])
+    const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+    await $.turn.start({ text: 'a', turnId: 't1', agentId: 'agent-1' })
+    await $.turn.start({ text: 'b', turnId: 't2', agentId: 'agent-2' })
+    const hatOf = async (id: string) => {
+      await ui.press({ key: `agent-${id}` })
+      const hat = (await ui.find({ key: 'pick-hat' }))?.props.value
+      await ui.press({ key: 'style-done' })
+      return hat
+    }
+
+    await ui.press({ key: 'agent-agent-1' })
+    await ui.select({ key: 'pick-hat', value: 'viking' })
+    await ui.press({ key: 'style-done' })
+    expect(await hatOf('agent-1')).toBe('viking')
+    expect(await hatOf('agent-2')).not.toBe('viking')
+
+    await ui.press({ key: 'agent-agent-1' })
+    await ui.press({ key: 'scope-type' })
+    await ui.select({ key: 'pick-hat', value: 'chef' })
+    await ui.press({ key: 'style-done' })
+    expect(await hatOf('agent-1')).toBe('chef')
+    expect(await hatOf('agent-2')).toBe('chef')
+    await ui.unmount()
+  })
+
+  test('/factory looks switches how undressed agents look', async ($, on) => {
+    engine(on, [])
+    const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+    expect((await ui.find({ key: 'looks' }))?.props.label).toBe('Undressed agents: random looks')
+    const { text } = await $.command.run(factory('looks type'))
+    expect(text).toContain('type')
+    expect((await ui.find({ key: 'looks' }))?.props.label).toBe('Undressed agents: looks by type')
+    await ui.press({ key: 'looks' })
+    expect((await ui.find({ key: 'looks' }))?.props.label).toBe('Undressed agents: random looks')
+    await ui.unmount()
   })
 })

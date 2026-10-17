@@ -73,6 +73,18 @@ export function luma(color: number): number {
 
 export const hex = (color: number) => `#${color.toString(16).padStart(6, '0')}`
 
+const PRETTY: Record<string, string> = {
+  tophat: 'top hat',
+  hardhat: 'hard hat',
+  gradcap: 'grad cap',
+  bowtie: 'bow tie',
+}
+
+/** A color, hat or extra's name as people read it. */
+export function prettyName(name: string): string {
+  return PRETTY[name] ?? name
+}
+
 /**
  * Hats sit on a 12-pixel-wide character: the column of each string is the
  * character's column. `overlap` rows of the hat are drawn over the body's top

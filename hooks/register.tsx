@@ -1,20 +1,21 @@
 import { atom, read, update } from 'claude-code'
 import type { AgentInfo, Elements, EngineInterface, Register, ToolCallInput } from 'claude-code'
 
-import type { AgentStatus, AgentStyle, FactoryAgent } from '../types'
+import type { AccessoryName, AgentStatus, AgentStyle, ColorName, FactoryAgent, HatName, LooksMode } from '../types'
 import {
   MAIN_ID,
   STYLE_CHOICES,
   addAgent,
+  baseStyle,
   clearFinished,
   cycle,
-  defaultStyle,
   describeAgent,
   endTool,
   labelFor,
   mainAgent,
   parseStyle,
   patchAgent,
+  lastingStyles,
   randomStyle,
   setStatus,
   settle,
@@ -24,6 +25,7 @@ import {
   toolDetail,
   withMain,
   type NewAgent,
+  type StyleScope,
 } from './model'
 import { rasterCells, sceneSvg } from './paint'
 import {
@@ -38,7 +40,7 @@ import {
   seatsNeeded,
   type SceneAgent,
 } from './scene'
-import { ACCESSORY_NAMES, COLORS, COLOR_NAMES, HAT_NAMES, hex } from './sprites'
+import { ACCESSORY_NAMES, COLORS, COLOR_NAMES, HAT_NAMES, hex, prettyName } from './sprites'
 
 const PANE = 'agent-factory'
 const TITLE = 'Agent Factory'
@@ -48,15 +50,22 @@ const TICK_MS = 250
 const RECONCILE_MS = 2000
 /** Desks across on the remote surfaces, which scale the picture to fit. */
 const REMOTE_COLS = 7
+/** CSS pixels per picture pixel on the remote surfaces. */
+const REMOTE_SCALE = 3
 
 const AGENTS = { plugin: 'agent-factory', key: 'agents' } as const
 const agentsAtom = atom(AGENTS, [])
 const stylesAtom = atom({ plugin: 'agent-factory', key: 'styles' } as const, {})
+const looksAtom = atom({ plugin: 'agent-factory', key: 'looks' } as const, 'random')
 const selectedAtom = atom({ plugin: 'agent-factory', key: 'selected' } as const, null)
+const scopeAtom = atom({ plugin: 'agent-factory', key: 'scope' } as const, 'agent')
 const demoAtom = atom({ plugin: 'agent-factory', key: 'isDemo' } as const, false)
 
 type Engine = EngineInterface
-type Table = Pick<Elements['mobile'], 'Box' | 'Text' | 'Button'>
+/** What every surface draws with; `Select` where the surface has one (not mobile yet). */
+type Table = Pick<Elements['mobile'], 'Box' | 'Text' | 'Button'> & { Select?: Elements['desktop']['Select'] }
+/** The choices that decide how every agent looks. */
+type Wardrobe = { styles: Record<string, AgentStyle>; looks: LooksMode }
 
 /** The terminal picture's frame; a reload starts it over, which nobody sees. */
 let frame = 0
@@ -176,9 +185,9 @@ async function tick($: Engine): Promise<void> {
   try {
     frame = (frame + 1) % (FRAMES * 1000)
     const agents = withMain(await read($, agentsAtom), 0)
-    const scene = sceneOf(agents, await read($, stylesAtom))
+    const scene = sceneOf(agents, await wardrobeOf($))
     const selected = agents.find(a => a.id === selectedId)
-    const lay = layout(seatsNeeded(scene), at.maxCols, at.isFlat)
+    const lay = layout(seatsNeeded(scene), at.maxCols, { isFlat: at.isFlat, spacing: 'snug' })
     const picture = rasterCells(drawScene(lay, scene, frame, selected?.seat), sceneLabels(lay, scene, STATION_W - 2))
     if (picture.columns !== at.columns || picture.rows !== at.rows) return
     await $.ui.blit({ requestId: PANE, key: RASTER, cells: picture.cells, columns: picture.columns, rows: picture.rows })
@@ -187,8 +196,12 @@ async function tick($: Engine): Promise<void> {
   }
 }
 
-function sceneOf(agents: readonly FactoryAgent[], styles: Record<string, AgentStyle>): SceneAgent[] {
-  return agents.map(agent => ({ agent, style: styleOf(agent, styles) }))
+async function wardrobeOf($: Engine): Promise<Wardrobe> {
+  return { styles: await read($, stylesAtom), looks: await read($, looksAtom) }
+}
+
+function sceneOf(agents: readonly FactoryAgent[], { styles, looks }: Wardrobe): SceneAgent[] {
+  return agents.map(agent => ({ agent, style: styleOf(agent, styles, looks) }))
 }
 
 const DEMO_TYPES = ['Explore', 'general-purpose', 'Plan', 'code-reviewer', 'test-runner', 'docs-writer']
@@ -253,17 +266,35 @@ async function select($: Engine, id: string | null): Promise<void> {
   await update($, selectedAtom, current => (current === id ? null : id))
 }
 
-async function restyle($: Engine, agent: FactoryAgent, change: (style: AgentStyle) => AgentStyle | null): Promise<void> {
-  const key = styleKey(agent)
+/**
+ * Changes the look of one agent, or of every agent of its type; a look for
+ * the type takes the place of the agent's own, so the picked one shows it.
+ * `null` takes the choice back. Choices for types and the manager are kept
+ * for later sessions.
+ */
+async function restyle(
+  $: Engine,
+  agent: Pick<FactoryAgent, 'id' | 'isMain' | 'type'>,
+  scope: StyleScope,
+  change: (style: AgentStyle) => AgentStyle | null,
+): Promise<void> {
+  const key = styleKey(agent, scope)
+  const looks = await read($, looksAtom)
   const styles = await update($, stylesAtom, all => {
     const next = { ...all }
-    const style = change(all[key] ?? defaultStyle(agent))
+    const style = change(baseStyle(agent, scope, all, looks))
+    if (scope === 'type') delete next[styleKey(agent, 'agent')]
     if (style === null) delete next[key]
     else next[key] = style
 
     return next
   })
-  await $.store.set('styles', styles)
+  await $.store.set('styles', lastingStyles(styles))
+}
+
+async function setLooks($: Engine, looks: LooksMode): Promise<void> {
+  await update($, looksAtom, () => looks)
+  await $.store.set('looks', looks)
 }
 
 const STATUS_THEME: Record<AgentStatus, string> = {
@@ -291,63 +322,123 @@ function altText(agents: readonly FactoryAgent[]): string {
   return `${TITLE}: ${agents.map(describeAgent).join('; ')}`.slice(0, 1000)
 }
 
+const options = (names: readonly string[]) => names.map(value => ({ value, label: prettyName(value) }))
+
+/** Pickers for color, hat and extra: lists where the surface has them, else buttons that step through. */
+function pickers(
+  $: Engine,
+  { Box, Button, Select }: Table,
+  selected: FactoryAgent,
+  scope: StyleScope,
+  shown: AgentStyle,
+) {
+  const set = (change: Partial<AgentStyle>) => restyle($, selected, scope, style => ({ ...style, ...change }))
+  if (Select !== undefined) {
+    return (
+      <Box flexDirection="row" flexWrap="wrap" columnGap={2}>
+        <Select
+          key="pick-color"
+          label="Color"
+          options={options(COLOR_NAMES)}
+          value={shown.color}
+          onSelect={value => void set({ color: value as ColorName })}
+        />
+        <Select
+          key="pick-hat"
+          label="Hat"
+          options={options(HAT_NAMES)}
+          value={shown.hat}
+          onSelect={value => void set({ hat: value as HatName })}
+        />
+        <Select
+          key="pick-extra"
+          label="Extra"
+          options={options(ACCESSORY_NAMES)}
+          value={shown.accessory}
+          onSelect={value => void set({ accessory: value as AccessoryName })}
+        />
+      </Box>
+    )
+  }
+
+  return (
+    <Box flexDirection="row" flexWrap="wrap" columnGap={1}>
+      <Button
+        key="style-color"
+        label={`Color: ${prettyName(shown.color)}`}
+        onPress={() => set({ color: cycle(STYLE_CHOICES.color, shown.color) })}
+      />
+      <Button key="style-hat" label={`Hat: ${prettyName(shown.hat)}`} onPress={() => set({ hat: cycle(STYLE_CHOICES.hat, shown.hat) })} />
+      <Button
+        key="style-extra"
+        label={`Extra: ${prettyName(shown.accessory)}`}
+        onPress={() => set({ accessory: cycle(STYLE_CHOICES.accessory, shown.accessory) })}
+      />
+    </Box>
+  )
+}
+
 /** The legend under the picture, and the style controls of the agent picked from it. */
 function controls(
   $: Engine,
-  { Box, Text, Button }: Table,
+  ui: Table,
   agents: readonly FactoryAgent[],
-  styles: Record<string, AgentStyle>,
+  { styles, looks }: Wardrobe,
   selected: FactoryAgent | undefined,
+  scope: StyleScope,
   width: number,
 ) {
+  const { Box, Text, Button } = ui
   const sorted = [...agents].sort((a, b) => a.seat - b.seat)
   const hasFinished = agents.some(a => !a.isMain && (a.status === 'done' || a.status === 'failed' || a.status === 'sleeping'))
-  const style = selected === undefined ? undefined : styleOf(selected, styles)
-  const who = selected?.isMain ? 'the manager' : `every ${selected?.type ?? ''} agent`
+  const reach: StyleScope = selected?.isMain ? 'type' : scope
 
   return (
     <Box flexDirection="column">
       <Text dimColor>
-        {summary(agents)} · pick an agent to style it
+        {summary(agents)} · pick an agent to dress it up
       </Text>
       {sorted.map(agent => {
         const doing = describeAgent(agent).split(' · ')[1] ?? agent.status
         return (
           <Button key={`agent-${agent.id}`} plain onPress={() => select($, agent.id)}>
-            <Text color={hex(COLORS[styleOf(agent, styles).color])}>■ </Text>
+            <Text color={hex(COLORS[styleOf(agent, styles, looks).color])}>■ </Text>
             {clip(agent.label, 16)}{' '}
             <Text color={STATUS_THEME[agent.status]}>{clip(doing, Math.max(10, width - 22))}</Text>
           </Button>
         )
       })}
-      {selected !== undefined && style !== undefined && (
-        <Box flexDirection="column" marginTop={1}>
-          <Text weight="bold">Styling {who}</Text>
+      {selected !== undefined && (
+        <Box flexDirection="column" marginTop={1} rowGap={1}>
+          <Text weight="bold">Dressing {selected.isMain ? 'the manager' : selected.label}</Text>
+          {!selected.isMain && (
+            <Box flexDirection="row" flexWrap="wrap" columnGap={1}>
+              <Text dimColor>For</Text>
+              <Button
+                key="scope-agent"
+                label="this agent"
+                variant={reach === 'agent' ? 'primary' : 'secondary'}
+                onPress={() => update($, scopeAtom, () => 'agent')}
+              />
+              <Button
+                key="scope-type"
+                label={`every ${selected.type} agent`}
+                variant={reach === 'type' ? 'primary' : 'secondary'}
+                onPress={() => update($, scopeAtom, () => 'type')}
+              />
+            </Box>
+          )}
+          {pickers($, ui, selected, reach, baseStyle(selected, reach, styles, looks))}
           <Box flexDirection="row" flexWrap="wrap" columnGap={1}>
             <Button
-              key="style-color"
-              label={`Color: ${style.color}`}
-              onPress={() => restyle($, selected, s => ({ ...s, color: cycle(STYLE_CHOICES.color, s.color) }))}
-            />
-            <Button
-              key="style-hat"
-              label={`Hat: ${style.hat}`}
-              onPress={() => restyle($, selected, s => ({ ...s, hat: cycle(STYLE_CHOICES.hat, s.hat) }))}
-            />
-            <Button
-              key="style-extra"
-              label={`Extra: ${style.accessory}`}
-              onPress={() => restyle($, selected, s => ({ ...s, accessory: cycle(STYLE_CHOICES.accessory, s.accessory) }))}
-            />
-            <Button
-              key="style-shuffle"
-              label="Shuffle"
+              key="style-random"
+              label="Random"
               onPress={async () => {
                 const seed = await $.clock.now()
-                await restyle($, selected, () => randomStyle(seed))
+                await restyle($, selected, reach, () => randomStyle(seed))
               }}
             />
-            <Button key="style-reset" label="Reset" onPress={() => restyle($, selected, () => null)} />
+            <Button key="style-reset" label="Reset" onPress={() => restyle($, selected, reach, () => null)} />
             {!selected.isMain && !selected.isDemo && (
               <Button key="style-view" label="Transcript" onPress={() => $.ui.view({ agentId: selected.id })} />
             )}
@@ -355,12 +446,17 @@ function controls(
           </Box>
         </Box>
       )}
-      {hasFinished && selected === undefined && (
-        <Button
-          key="clear-finished"
-          label="Send finished agents home"
-          onPress={() => mutate($, agents => clearFinished(agents))}
-        />
+      {selected === undefined && (
+        <Box flexDirection="row" flexWrap="wrap" columnGap={1}>
+          <Button
+            key="looks"
+            label={looks === 'random' ? 'Undressed agents: random looks' : 'Undressed agents: looks by type'}
+            onPress={() => setLooks($, looks === 'random' ? 'type' : 'random')}
+          />
+          {hasFinished && (
+            <Button key="clear-finished" label="Send finished agents home" onPress={() => mutate($, list => clearFinished(list))} />
+          )}
+        </Box>
       )}
     </Box>
   )
@@ -368,19 +464,26 @@ function controls(
 
 const HELP = [
   '/factory — open or close the Agent Factory pane',
-  '/factory style <who> color=<c> hat=<h> extra=<e> — style the manager (main) or every agent of a type',
+  '/factory style <who> color=<c> hat=<h> extra=<e> — dress the manager (main), every agent of a type, or one agent by its name tag',
   '/factory reset [who] — back to the default looks',
+  '/factory looks random|type — how agents nobody dressed look: each its own by lot, or dressed for their type',
   '/factory clear — send finished agents home',
   '/factory demo — add or remove pretend agents, to see the floor busy',
   '/factory options — list the colors, hats and extras',
 ].join('\n')
 
-/** Who a `/factory style` names: the manager, an agent type on the floor, or any type. */
-function targetOf(word: string, agents: readonly FactoryAgent[]): Pick<FactoryAgent, 'isMain' | 'type'> {
-  if (/^(main|manager|claude|boss)$/i.test(word)) return { isMain: true, type: 'main' }
-  const onFloor = agents.find(a => !a.isMain && (a.type.toLowerCase() === word.toLowerCase() || a.label === word))
+type Target = { agent: Pick<FactoryAgent, 'id' | 'isMain' | 'type'>; scope: StyleScope; name: string }
 
-  return { isMain: false, type: onFloor?.type ?? word }
+/** Who a `/factory style` names: the manager, a type on the floor, an agent by its name tag, or any type. */
+function targetOf(word: string, agents: readonly FactoryAgent[]): Target {
+  if (/^(main|manager|claude|boss)$/i.test(word)) return { agent: mainAgent(0), scope: 'type', name: 'The manager' }
+  const lower = word.toLowerCase()
+  const ofType = agents.find(a => !a.isMain && a.type.toLowerCase() === lower)
+  if (ofType !== undefined) return { agent: ofType, scope: 'type', name: `Every ${ofType.type} agent` }
+  const tagged = agents.find(a => !a.isMain && a.label.toLowerCase() === lower)
+  if (tagged !== undefined) return { agent: tagged, scope: 'agent', name: tagged.label }
+
+  return { agent: { id: '', isMain: false, type: word }, scope: 'type', name: `Every ${word} agent` }
 }
 
 async function runCommand($: Engine, args: string): Promise<string> {
@@ -408,9 +511,10 @@ async function runCommand($: Engine, args: string): Promise<string> {
       const parsed = parseStyle(words.slice(2))
       if ('error' in parsed) return `Unknown style "${parsed.error}". /factory options lists them.`
       const target = targetOf(who, agents)
-      await restyle($, { ...mainAgent(0), ...target }, style => ({ ...style, ...parsed.change }))
-      const style = styleOf(target, await read($, stylesAtom))
-      return `${target.isMain ? 'The manager' : `Every ${target.type} agent`} now wears: ${style.color}, ${style.hat} hat, ${style.accessory}.`
+      await restyle($, target.agent, target.scope, style => ({ ...style, ...parsed.change }))
+      const { styles, looks } = await wardrobeOf($)
+      const style = baseStyle(target.agent, target.scope, styles, looks)
+      return `${target.name} now wears: ${prettyName(style.color)}, ${prettyName(style.hat)} hat, ${prettyName(style.accessory)}.`
     }
     case 'reset': {
       const who = words[1]
@@ -420,8 +524,16 @@ async function runCommand($: Engine, args: string): Promise<string> {
         return 'Every agent is back to its default look.'
       }
       const target = targetOf(who, agents)
-      await restyle($, { ...mainAgent(0), ...target }, () => null)
-      return `${target.isMain ? 'The manager' : `Every ${target.type} agent`} is back to its default look.`
+      await restyle($, target.agent, target.scope, () => null)
+      return `${target.name}: back to the default look.`
+    }
+    case 'looks': {
+      const mode = words[1]?.toLowerCase()
+      if (mode !== 'random' && mode !== 'type') return 'Usage: /factory looks random|type'
+      await setLooks($, mode)
+      return mode === 'random'
+        ? 'Agents nobody dressed now each get a look by lot.'
+        : 'Agents nobody dressed now dress for their type.'
     }
     case 'clear':
       await mutate($, list => clearFinished(list))
@@ -484,6 +596,8 @@ export const register: Register = on => {
     await quietly($, 'styles', async () => {
       const stored = await $.store.get('styles')
       if (isStyles(stored)) await update($, stylesAtom, current => ({ ...stored, ...current }))
+      const looks = await $.store.get('looks')
+      if (looks === 'random' || looks === 'type') await update($, looksAtom, () => looks)
       await mutate($, agents => agents)
     })
     await quietly($, 'command', () =>
@@ -506,6 +620,7 @@ export const register: Register = on => {
         const now = await $.clock.now()
         await mutate($, () => [mainAgent(now)])
         await update($, demoAtom, () => false)
+        await update($, stylesAtom, lastingStyles)
       })
     }
 
@@ -555,11 +670,12 @@ export const register: Register = on => {
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const agents = withMain(await read($, agentsAtom), 0)
-    const styles = await read($, stylesAtom)
+    const wardrobe = await wardrobeOf($)
     const picked = await read($, selectedAtom)
+    const scope = await read($, scopeAtom)
     const selected = agents.find(a => a.id === picked)
     selectedId = selected?.id ?? null
-    const scene = sceneOf(agents, styles)
+    const scene = sceneOf(agents, wardrobe)
     const seats = seatsNeeded(scene)
     const width = e.props.bodyColumns
 
@@ -567,15 +683,15 @@ export const register: Register = on => {
       const ui = $.ui.resolve(e)
       const { Box, Raster } = ui
       const isFlat = e.props.placement === 'inline'
-      const maxCols = colsFor(width)
-      const lay = layout(seats, maxCols, isFlat)
+      const maxCols = colsFor(width, 'snug')
+      const lay = layout(seats, maxCols, { isFlat, spacing: 'snug' })
       const picture = rasterCells(drawScene(lay, scene, frame, selected?.seat), sceneLabels(lay, scene, STATION_W - 2))
       mounted = { columns: picture.columns, rows: picture.rows, maxCols, isFlat }
 
       return (
         <Box flexDirection="column">
           <Raster key={RASTER} columns={picture.columns} rows={picture.rows} cells={picture.cells} />
-          {controls($, ui, agents, styles, selected, width)}
+          {controls($, ui, agents, wardrobe, selected, scope, width)}
         </Box>
       )
     }
@@ -583,17 +699,19 @@ export const register: Register = on => {
     // The remote surfaces draw an SVG that plays its own frames.
     const ui = $.ui.resolve(e)
     const { Box, Svg } = ui
-    const lay = layout(seats, REMOTE_COLS)
+    // The mobile app draws no lists yet: its pickers are buttons.
+    const table: Table = e.surface === 'mobile' ? { Box, Text: ui.Text, Button: ui.Button } : ui
+    const lay = layout(seats, REMOTE_COLS, { spacing: 'roomy' })
     const frames = Array.from({ length: FRAMES }, (_, f) => drawScene(lay, scene, f, selected?.seat))
     const source = sceneSvg(frames, sceneLabels(lay, scene, 10), sceneHotspots(lay, scene, describeAgent), {
-      scale: 4,
+      scale: REMOTE_SCALE,
       secondsPerFrame: TICK_MS / 1000,
     })
 
     return (
-      <Box flexDirection="column">
+      <Box flexDirection="column" rowGap={1}>
         <Svg source={source} alt={altText(agents)} isInteractive />
-        {controls($, ui, agents, styles, selected, width)}
+        {controls($, table, agents, wardrobe, selected, scope, width)}
       </Box>
     )
   })

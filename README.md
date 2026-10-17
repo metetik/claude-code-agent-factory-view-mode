@@ -9,7 +9,10 @@ their task is done.
 
 Every agent is the Claude Code mascot, and each one can be dressed up: 14 body colors,
 18 hats (crown, top hat, wizard hat, hard hat, propeller cap, headphones, viking helmet,
-...) and 8 extras (glasses, shades, monocle, tie, bow tie, mustache, scarf, blush).
+...) and 8 extras (glasses, shades, monocle, tie, bow tie, mustache, scarf, blush). Agents
+nobody dressed get a look of their own by lot (or, if you prefer, a look for their type:
+Explore agents in safari hats, general-purpose ones in hard hats, ...). The manager keeps
+its crown and tie until you change them, and nobody else draws the crown by chance.
 
 ## What you see
 
@@ -26,22 +29,31 @@ The manager dozes off 90 seconds after the last turn ends; a finished subagent c
 first; when 24 are taken, the agent that finished longest ago goes home to make room.
 
 The terminal draws the floor with half-block characters, two pixels a cell, repainted four
-times a second. Claude Code Desktop and the mobile app draw it as an animated SVG; hover a
-desk there for what that agent is doing.
+times a second. Claude Code Desktop and the mobile app draw it as an animated SVG, three
+CSS pixels to a picture pixel with room between the desks; hover a desk there for what
+that agent is doing.
 
 ## Using it
 
 The pane opens by itself when a session starts. Under the floor is a legend, one line per
-agent: pick one to style it (the style applies to the manager, or to every agent of that
-subagent type) and press **Color**, **Hat** or **Extra** to cycle, **Shuffle** for a random
-look, **Reset** for the default, **Transcript** to open that subagent's transcript.
-Styles are remembered across sessions.
+agent. Pick one to dress it up:
+
+- **For**: this agent alone, or every agent of its type.
+- **Color**, **Hat**, **Extra**: lists to choose from (buttons that step through them in the
+  mobile app, which has no lists yet).
+- **Random** draws a new look, **Reset** takes the choice back, **Transcript** opens that
+  subagent's transcript.
+
+Below the legend, **Undressed agents** switches between random looks and looks by type.
+Looks chosen for the manager and for types, and that switch, are remembered across
+sessions; a look chosen for one agent lasts as long as that agent.
 
 | Command | Does |
 | --- | --- |
 | `/factory` | open or close the pane (closing it keeps it closed in later sessions) |
-| `/factory style <who> color=<c> hat=<h> extra=<e>` | style the manager (`main`) or every agent of a type (`Explore`, `Plan`, ...) |
+| `/factory style <who> color=<c> hat=<h> extra=<e>` | dress the manager (`main`), every agent of a type (`Explore`, `Plan`, ...), or one agent by its name tag |
 | `/factory reset [who]` | back to the default looks |
+| `/factory looks random\|type` | how agents nobody dressed look: each its own by lot, or dressed for their type |
 | `/factory clear` | send finished agents home |
 | `/factory demo` | add (or remove) six pretend agents, to see a busy floor |
 | `/factory options` | list the colors, hats and extras |
