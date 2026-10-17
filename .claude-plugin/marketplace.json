@@ -1,0 +1,14 @@
+{
+  "name": "factory-view",
+  "description": "Factory View, a Claude Code mod: a pixel-art office where Claude and its subagents work at their desks.",
+  "owner": {
+    "name": "metetik"
+  },
+  "plugins": [
+    {
+      "name": "factory-view",
+      "source": "./",
+      "description": "Watch Claude and its subagents work at their desks on a pixel-art factory floor, and dress them up."
+    }
+  ]
+}

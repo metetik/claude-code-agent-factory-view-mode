@@ -1,91 +1,142 @@
-# Factory View
+<div align="center">
 
-A Claude Code mod that turns orchestration into a little pixel-art office. Claude, the
-main agent, is the manager at the gilded desk in the middle of the floor; every subagent
-it starts gets a desk of its own around it. Agents at work type away while their monitor
-scrolls and a thought bubble shows the kind of tool they run; agents with nothing to do
-look around, doze off with a stream of Zzz, or put their feet up with a green check once
-their task is done.
+# 🏭 Factory View
 
-Every agent is the Claude Code mascot, and each one can be dressed up: 14 body colors,
-18 hats (crown, top hat, wizard hat, hard hat, propeller cap, headphones, viking helmet,
-...) and 8 extras (glasses, shades, monocle, tie, bow tie, mustache, scarf, blush). Agents
-nobody dressed get a look of their own by lot (or, if you prefer, a look for their type:
-Explore agents in safari hats, general-purpose ones in hard hats, ...). The manager keeps
-its crown and tie until you change them, and nobody else draws the crown by chance.
+**A pixel-art office for Claude Code: watch Claude and its subagents work at their desks.**
 
-## What you see
+![Claude Code mod](https://img.shields.io/badge/Claude%20Code-mod-D97757)
+![Terminal, desktop and mobile](https://img.shields.io/badge/draws%20on-terminal%20·%20desktop%20·%20mobile-3a4253)
+
+<img src="docs/factory.gif" alt="Claude hands out work: subagents take the desks around it, type away with their tools in thought bubbles, finish with a green check and doze off" width="564">
+
+[Install](#-install) · [What you see](#-what-you-see) · [Three sizes](#-three-sizes) · [Dress them up](#-dress-them-up) · [Commands](#%EF%B8%8F-commands)
+
+</div>
+
+When Claude orchestrates, a lot happens at once and most of it is out of sight. Factory View
+turns it into a little office in a pane beside the conversation. Claude, the main agent, is
+the manager at the gilded desk in the middle of the floor; every subagent it starts takes a
+desk of its own around it. Agents at work type away while their monitor scrolls and a
+thought bubble shows the tool they run; agents with nothing to do look around, doze off in a
+stream of Zzz, or cheer with a green check when their task comes back.
+
+Every agent is the Claude Code mascot, and every one of them can be dressed up.
+
+## 📦 Install
+
+At the prompt of a Claude Code terminal session:
+
+```
+/plugin install factory-view --marketplace metetik/claude-code-agent-factory-view-mode
+```
+
+Answer `y` to add the marketplace, pick a scope, and the pane opens. From a shell:
+
+```sh
+claude plugin install factory-view --marketplace metetik/claude-code-agent-factory-view-mode
+```
+
+In the desktop app, where `/plugin` does not run: click **+** next to the prompt box, then
+**Plugins**, **Add marketplace** with `metetik/claude-code-agent-factory-view-mode`, then
+**Add plugin**.
+
+Then type `/factory-view demo` to fill the floor with six pretend agents, or give Claude a
+task worth a few subagents and watch them get to work.
+
+> Factory View is a mod, built on Claude Code's function hooks (early access). It was made
+> and tested on Claude Code 2.1.302.
+
+## 👀 What you see
 
 | On the floor | Means |
 | --- | --- |
-| Arms typing, code scrolling on the monitor, a bubble with an icon | working: the icon is the tool (magnifier for reading and searching, pencil for edits, a terminal for Bash, a globe for the web, a little mascot for delegating, a checklist for todos, `...` for thinking) |
-| Eyes looking around, a bubble of dots | waiting: the manager waits for you; a subagent waits to start or for a message |
-| Eyes closed, Zzz rising, screensaver | sleeping: idle for a while |
-| Happy eyes, arms up, a green check | done: the task came back |
-| X eyes, a red `!`, a red screen | failed |
+| ⌨️ Arms typing, code scrolling on the monitor, a bubble over it | **working**: the bubble shows the tool: a magnifier for reading and searching, a pencil for edits, a terminal for Bash, a globe for the web, a little mascot for handing out work, a checklist for todos, `…` for thinking (colors stand for them on the smaller desks) |
+| 🫧 Eyes looking around, a bubble of dots | **waiting**: the manager waits for you; a subagent waits to start, or for a message |
+| ✅ Happy eyes, arms up, a green check | **done**: the task came back |
+| 💤 Eyes closed, Zzz rising, screensaver | **sleeping**: idle for a while; a finished agent keeps its check |
+| ❗ X eyes, a red `!`, a red screen | **failed** |
 
-The manager dozes off 90 seconds after the last turn ends; a finished subagent cheers for
-20 seconds and then naps at its desk, check mark and all. Desks fill nearest the manager
-first; when 24 are taken, the agent that finished longest ago goes home to make room.
+The manager dozes off 90 seconds after the last turn ends; a finished subagent cheers for 20
+seconds, then naps at its desk. Desks fill nearest the manager first, ringing outward; when
+24 are taken, the agent that finished longest ago goes home to make room.
 
-The terminal draws the floor in character cells, repainted four times a second, in one of
-three sizes, each with pictures of its own: **large** in half blocks, two square pixels a
-cell (agents 8 cells wide); **medium**, the default, and **small** in quarter blocks, 2x2
-pixels a cell (agents 6 and 4 cells wide), the same mascot, hats and extras drawn in fewer
-pixels, and the bubble showing the tool by its color. A 3x3 floor takes 66, 54 or 42
-columns, with 6 columns and 3 rows of floor between the desks at every size. A letter cannot be
-drawn smaller than its cell, so a name tag takes its desk's width and most of the floor
-beside it: 21 letters at large, 17 at medium, 13 at small. Claude Code Desktop and the mobile app draw the floor as an animated SVG with room
-between the desks, scaled by the same size; hover a desk there for what that agent is
-doing. **Size** under the legend, or `/factory-view size`, switches between them.
+Under the floor, a legend lists every agent with what it is doing right now, the tool and
+what it works on (`Grep: TODO`, `Edit: parser.ts`). In the desktop and mobile apps, hover a
+desk for the same.
 
-## Using it
+## 📏 Three sizes
 
-The pane opens by itself when a session starts. Under the floor is a legend, one line per
-agent. Pick one to dress it up:
+<div align="center">
+<img src="docs/sizes.gif" alt="The same floor at large, medium and small" width="846">
+</div>
 
-- **For**: this agent alone, or every agent of its type.
-- **Color**, **Hat**, **Extra**: lists to choose from (buttons that step through them in the
-  mobile app, which has no lists yet).
-- **Random** draws a new look, **Reset** takes the choice back, **Transcript** opens that
-  subagent's transcript.
+A terminal cell is the smallest thing a terminal can draw, so each size has pictures of its
+own. **Large** draws in half blocks, two square pixels a cell, the mascot 8 cells wide.
+**Medium** (the default) and **small** draw in quarter blocks, 2x2 pixels a cell, the
+mascot 6 and 4 cells wide, with every hat and extra redrawn for them. A 3x3 floor takes 66,
+54 or 42 columns. A name tag can't shrink with its desk (a letter is a cell), so it borrows
+the floor beside it: 21, 17 and 13 letters.
 
-Below the legend, **Undressed agents** switches between random looks and looks by type, and
-**Size** steps through small, medium and large agents. Looks chosen for the manager and for types, and
-both switches, are remembered across sessions; a look chosen for one agent lasts as long as
-that agent.
+Claude Code Desktop and the mobile app draw the same floor as an animated SVG, scaled by
+the same size. Switch with **Size** under the legend, or `/factory-view size`.
+
+## 🎩 Dress them up
+
+<div align="center">
+<img src="docs/wardrobe.gif" alt="Three agents trying on hats, colors and extras" width="684">
+</div>
+
+**14 colors** · **18 hats**: crown, top hat, cap, beanie, wizard hat, party hat, hard hat,
+chef's hat, cowboy hat, safari hat, propeller cap, headphones, bow, halo, antenna, grad cap,
+viking helmet, sprout · **8 extras**: glasses, shades, monocle, tie, bow tie, mustache,
+scarf, blush.
+
+Pick an agent in the legend and choose its color, hat and extra from the lists (the mobile
+app steps through them with buttons), for that agent alone or for every agent of its type.
+**Random** draws a new look, **Reset** takes the choice back, **Transcript** opens that
+subagent's conversation.
+
+Agents nobody dressed draw a look of their own by lot. Prefer uniforms? Switch
+**Undressed agents** to *looks by type*: Explore agents in safari hats, general-purpose ones
+in hard hats, Plan in wizard hats. The manager keeps its crown and tie until you change
+them, and nobody else draws the crown by chance. Looks chosen for the manager and for types
+are remembered across sessions.
+
+## ⌨️ Commands
 
 | Command | Does |
 | --- | --- |
 | `/factory-view` | open or close the pane (closing it keeps it closed in later sessions) |
-| `/factory-view style <who> color=<c> hat=<h> extra=<e>` | dress the manager (`main`), every agent of a type (`Explore`, `Plan`, ...), or one agent by its name tag |
+| `/factory-view demo` | add or remove six pretend agents, to see a busy floor |
+| `/factory-view style <who> color=<c> hat=<h> extra=<e>` | dress the manager (`main`), every agent of a type (`Explore`, `Plan`, …), or one agent by its name tag |
 | `/factory-view reset [who]` | back to the default looks |
-| `/factory-view looks random\|type` | how agents nobody dressed look: each its own by lot, or dressed for their type |
-| `/factory-view size small\|medium\|large` | how big the agents are drawn (medium by default) |
+| `/factory-view looks random\|type` | how agents nobody dressed look |
+| `/factory-view size small\|medium\|large` | how big the agents are drawn |
 | `/factory-view clear` | send finished agents home |
-| `/factory-view demo` | add (or remove) six pretend agents, to see a busy floor |
 | `/factory-view options` | list the colors, hats and extras |
 
-## How it works
+## 🔧 How it works
 
-`hooks/register.tsx` follows the session: `turn.start` and `turn.complete` for each loop
-(the main one and every subagent's), `tool.call` for the tool each agent runs, and
+`hooks/register.tsx` follows the session: `turn.start` and `turn.complete` for every loop,
+the main one and each subagent's, `tool.call` for the tool each agent runs, and
 `$.agent.list()` every two seconds to catch anything missed. What it learns lives in
-`$.state`, so the pane redraws on every change and survives a reload.
+`$.state`, so the pane redraws on every change and survives a reload. The terminal's picture
+is a `Raster` repainted four times a second with `$.ui.blit`; the remote surfaces get an SVG
+whose frames play by SMIL, so it animates with no redraws at all.
 
 | File | Holds |
 | --- | --- |
 | `hooks/register.tsx` | the hooks: events, the pane, the `/factory-view` command, the animation ticker |
 | `hooks/model.ts` | agents, desks, status changes and styles, as plain functions |
-| `hooks/scene.ts` | the floor plan and the pixel painter |
-| `hooks/sprites.ts` | colors, hats, extras and icons, drawn as strings |
-| `hooks/minis.ts` | the same hats, extras and icons for the large terminal desks |
-| `hooks/tinies.ts` | the hats and extras for the medium and small desks, in quarter blocks |
+| `hooks/scene.ts` | the floor plan and the pixel painter, for every size |
+| `hooks/sprites.ts` | colors, hats, extras and icons for the scaled SVG |
+| `hooks/minis.ts` | the same for the large terminal desks |
+| `hooks/tinies.ts` | the same for the medium and small desks, in quarter blocks |
 | `hooks/paint.ts` | the picture as terminal cells (half or quarter blocks), and as an SVG with its frames |
 | `types/index.d.ts` | the shape of the mod's state |
 | `tests/factory.test.ts` | the floor plan, the agents, the session and the pane |
 
-## Developing
+## 🛠️ Developing
 
 ```sh
 claude plugin validate .
