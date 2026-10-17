@@ -941,20 +941,31 @@ export function statusColor(status: FactoryAgent['status']): number {
   return STATUS_COLORS[status]
 }
 
-/** How many letters a desk's name tag holds: one a column, two pixels to a column on quarter blocks. */
+/**
+ * How many letters a desk's name tag holds, a letter to a column: the desk's
+ * width and the floor beside it, less one column, so the tags of desks side
+ * by side never touch. A letter cannot be drawn smaller than its cell, so
+ * the small desks' tags spill into the floor to stay readable.
+ */
 export function labelChars(lay: Layout): number {
-  return lay.isQuad ? lay.deskW / 2 - 1 : lay.deskW - 2
+  const perColumn = lay.isQuad ? 2 : 1
+  const { gapX } = spacingOf(lay.spacing, lay.art)
+
+  return Math.floor((lay.deskW + gapX) / perColumn) - 1
 }
 
-/** Each desk's name tag, `maxChars` wide at most. */
+/** Each desk's name tag, `maxChars` wide at most, centered under its desk. */
 export function sceneLabels(lay: Layout, agents: readonly SceneAgent[], maxChars: number): Label[] {
+  const perColumn = lay.isQuad ? 2 : 1
+  const columns = labelChars(lay)
   const labels: Label[] = []
   for (const { agent } of agents) {
     const origin = stationOrigin(lay, agent.seat)
     if (origin === undefined) continue
     const text = clip(agent.label, maxChars)
     const y = lay.isQuad ? origin.y + COMPACT[lay.art as 'medium' | 'small'].label : origin.y + lay.deskH - 2
-    labels.push({ x: origin.x, y, width: lay.deskW, text, color: statusColor(agent.status) })
+    const x = origin.x + perColumn * Math.floor((lay.deskW / perColumn - columns) / 2)
+    labels.push({ x, y, width: columns * perColumn, text, color: statusColor(agent.status) })
   }
 
   return labels

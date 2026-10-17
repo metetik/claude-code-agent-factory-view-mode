@@ -53,6 +53,8 @@ const REMOTE_COLS = 7
 /** CSS pixels per picture pixel on the remote surfaces, by agent size. */
 const REMOTE_SCALE: Record<AgentSize, number> = { small: 1, medium: 1.5, large: 2 }
 const SIZES: AgentSize[] = ['small', 'medium', 'large']
+/** Letters in a name tag on the remote surfaces: what fits under a desk and the floor beside it. */
+const REMOTE_LABEL_CHARS = 14
 
 const AGENTS = { plugin: 'factory-view', key: 'agents' } as const
 const agentsAtom = atom(AGENTS, [])
@@ -727,7 +729,7 @@ export const register: Register = on => {
     const table: Table = e.surface === 'mobile' ? { Box, Text: ui.Text, Button: ui.Button } : ui
     const lay = layout(seats, REMOTE_COLS, { spacing: 'roomy' })
     const frames = Array.from({ length: FRAMES }, (_, f) => drawScene(lay, scene, f, selected?.seat))
-    const source = sceneSvg(frames, sceneLabels(lay, scene, 10), sceneHotspots(lay, scene, describeAgent), {
+    const source = sceneSvg(frames, sceneLabels(lay, scene, REMOTE_LABEL_CHARS), sceneHotspots(lay, scene, describeAgent), {
       scale: REMOTE_SCALE[size],
       secondsPerFrame: TICK_MS / 1000,
     })

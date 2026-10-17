@@ -14,7 +14,7 @@ import {
   DONE_DOZE_MS,
   MAIN_DOZE_MS,
 } from '../hooks/model'
-import { drawScene, layout, stationOrigin } from '../hooks/scene'
+import { drawScene, labelChars, layout, sceneLabels, stationOrigin } from '../hooks/scene'
 import { quadrantCell, rasterCells, sceneSvg, SVG_LIMIT } from '../hooks/paint'
 
 const PLUGIN = 'factory-view'
@@ -71,6 +71,21 @@ describe('the floor plan', () => {
       // even columns too where a cell is two pixels wide.
       expect(stationOrigin(lay, 8)!.y % 2).toBe(0)
       if (lay.isQuad) expect(stationOrigin(lay, 8)!.x % 2).toBe(0)
+    }
+  })
+
+  test('name tags spill under the floor beside their desk, never into the next tag', () => {
+    for (const art of ['large', 'medium', 'small'] as const) {
+      const lay = layout(3, 3, { art })
+      expect(labelChars(lay)).toBeGreaterThanOrEqual(12)
+      let agents: FactoryAgent[] = [{ ...mainAgent(0), label: 'A long name for a tag' }]
+      for (let i = 1; i < 3; i++) agents = addAgent(agents, { id: `a${i}`, type: 'x', label: 'Another long name', description: '' }, 0)
+      const tags = sceneLabels(lay, agents.map(agent => ({ agent, style: defaultStyle(agent) })), labelChars(lay))
+      const spans = tags.map(tag => [tag.x, tag.x + tag.width] as const).sort((a, b) => a[0] - b[0])
+      expect(spans[0]![0]).toBeGreaterThanOrEqual(0)
+      expect(spans[2]![1]).toBeLessThanOrEqual(lay.width)
+      expect(spans[0]![1]).toBeLessThan(spans[1]![0])
+      expect(spans[1]![1]).toBeLessThan(spans[2]![0])
     }
   })
 
