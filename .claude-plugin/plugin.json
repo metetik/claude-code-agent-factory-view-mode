@@ -9,6 +9,7 @@
   },
   "homepage": "https://github.com/metetik/claude-code-agent-factory-view-mode#readme",
   "repository": "https://github.com/metetik/claude-code-agent-factory-view-mode",
+  "license": "MIT",
   "keywords": [
     "subagents",
     "multi-agent",

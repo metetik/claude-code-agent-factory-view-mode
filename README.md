@@ -6,6 +6,7 @@
 
 ![Claude Code mod](https://img.shields.io/badge/Claude%20Code-mod-D97757)
 ![Terminal, desktop and mobile](https://img.shields.io/badge/draws%20on-terminal%20·%20desktop%20·%20mobile-3a4253)
+![MIT license](https://img.shields.io/badge/license-MIT-6cc24a)
 
 <img src="docs/factory.gif" alt="Claude hands out work: subagents take the desks around it, type away with their tools in thought bubbles, finish with a green check and doze off" width="564">
 
@@ -183,3 +184,7 @@ bun scripts/preview.ts out 8 5   # the floor with 8 agents as SVG and ANSI, outs
 
 `tsc -p .` type-checks the mod once Claude Code has loaded it from this folder, which lays
 the API's declarations in `.claude-plugin/types/`.
+
+## 📄 License
+
+[MIT](LICENSE)
