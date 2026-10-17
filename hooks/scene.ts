@@ -95,7 +95,7 @@ export type Spacing = 'snug' | 'roomy'
 
 function spacingOf(spacing: Spacing, art: Art): { gapX: number; gapY: number; margin: number; bottom: number } {
   if (spacing === 'roomy') return { gapX: 10, gapY: 6, margin: 8, bottom: 6 }
-  if (DESKS[art].isQuad) return { gapX: 8, gapY: 4, margin: 4, bottom: 2 }
+  if (DESKS[art].isQuad) return { gapX: 12, gapY: 6, margin: 6, bottom: 2 }
 
   return { gapX: art === 'large' ? 6 : 4, gapY: 2, margin: 3, bottom: 2 }
 }
