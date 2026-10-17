@@ -23,12 +23,12 @@ export function base64(bytes: Uint8Array): string {
   return out.join('')
 }
 
-/** A label's text centered in its width, one glyph per column. */
-function labelCells(labels: readonly Label[], columns: number): Map<number, { ch: number; color: number }> {
+/** A label's text centered in its width, one glyph per column, `perColumn` pixels to a column. */
+function labelCells(labels: readonly Label[], columns: number, perColumn: number): Map<number, { ch: number; color: number }> {
   const cells = new Map<number, { ch: number; color: number }>()
   for (const label of labels) {
     const chars = Array.from(label.text)
-    const left = label.x + Math.floor((label.width - chars.length) / 2)
+    const left = Math.floor(label.x / perColumn) + Math.floor((label.width / perColumn - chars.length) / 2)
     const row = label.y >> 1
     chars.forEach((ch, i) => {
       const code = ch.codePointAt(0) ?? 32
@@ -40,26 +40,76 @@ function labelCells(labels: readonly Label[], columns: number): Map<number, { ch
   return cells
 }
 
+/** The quarter blocks by which of a cell's four pixels are foreground: 1 top left, 2 top right, 4 bottom left, 8 bottom right. */
+const QUADRANTS = [
+  0x20, 0x2598, 0x259d, 0x2580, 0x2596, 0x258c, 0x259e, 0x259b, 0x2597, 0x259a, 0x2590, 0x259c, 0x2584, 0x2599, 0x259f, 0x2588,
+]
+
+function distance(a: number, b: number): number {
+  const dr = ((a >> 16) & 0xff) - ((b >> 16) & 0xff)
+  const dg = ((a >> 8) & 0xff) - ((b >> 8) & 0xff)
+  const db = (a & 0xff) - (b & 0xff)
+
+  return dr * dr + dg * dg + db * db
+}
+
 /**
- * The terminal's picture: every cell an upper half block, its foreground the
- * pixel above and its background the pixel below, so pixels come out square.
+ * One cell of 2x2 pixels as a quarter block: the two colors most of its
+ * pixels have, every pixel drawn in the nearer of them (a cell paints two).
  */
-export function rasterCells(canvas: Canvas, labels: readonly Label[]): { columns: number; rows: number; cells: string } {
-  const columns = canvas.width
+export function quadrantCell(pixels: readonly [number, number, number, number]): { ch: number; fg: number; bg: number } {
+  const counts = new Map<number, number>()
+  for (const p of pixels) counts.set(p, (counts.get(p) ?? 0) + 1)
+  const ranked = [...counts].sort((a, b) => b[1] - a[1])
+  const bg = ranked[0]![0]
+  const fg = ranked[1]?.[0] ?? bg
+  let mask = 0
+  pixels.forEach((p, i) => {
+    if (p !== bg && distance(p, fg) < distance(p, bg)) mask |= 1 << i
+  })
+
+  return { ch: QUADRANTS[mask]!, fg, bg }
+}
+
+/**
+ * The terminal's picture. Half blocks by default: every cell an upper half
+ * block, its foreground the pixel above and its background the pixel below,
+ * so pixels come out square. Quarter blocks with `isQuad`: 2x2 pixels a cell.
+ */
+export function rasterCells(
+  canvas: Canvas,
+  labels: readonly Label[],
+  isQuad = false,
+): { columns: number; rows: number; cells: string } {
+  const perColumn = isQuad ? 2 : 1
+  const columns = Math.ceil(canvas.width / perColumn)
   const rows = Math.ceil(canvas.height / 2)
   const bytes = new Uint8Array(columns * rows * 12)
   const view = new DataView(bytes.buffer)
-  const text = labelCells(labels, columns)
+  const text = labelCells(labels, columns, perColumn)
+  const at = (x: number, y: number) => canvas.get(Math.min(x, canvas.width - 1), Math.min(y, canvas.height - 1))
   for (let row = 0; row < rows; row++) {
     for (let col = 0; col < columns; col++) {
-      const top = canvas.get(col, row * 2)
-      const bottom = row * 2 + 1 < canvas.height ? canvas.get(col, row * 2 + 1) : top
       const index = row * columns + col
       const glyph = text.get(index)
-      const at = index * 12
-      view.setUint32(at, glyph?.ch ?? UPPER_HALF, true)
-      view.setUint32(at + 4, glyph?.color ?? top, true)
-      view.setUint32(at + 8, glyph === undefined ? bottom : top, true)
+      const offset = index * 12
+      let cell: { ch: number; fg: number; bg: number }
+      if (isQuad) {
+        const x = col * 2
+        const y = row * 2
+        cell = quadrantCell([at(x, y), at(x + 1, y), at(x, y + 1), at(x + 1, y + 1)])
+      } else {
+        const top = at(col, row * 2)
+        cell = { ch: UPPER_HALF, fg: top, bg: at(col, row * 2 + 1) }
+      }
+      if (glyph !== undefined) {
+        // A name tag sits on the floor: the color most of the cell has.
+        const floor = isQuad ? cell.bg : cell.fg
+        cell = { ch: glyph.ch, fg: glyph.color, bg: floor }
+      }
+      view.setUint32(offset, cell.ch, true)
+      view.setUint32(offset + 4, cell.fg, true)
+      view.setUint32(offset + 8, cell.bg, true)
     }
   }
 

@@ -15,7 +15,7 @@ import {
   MAIN_DOZE_MS,
 } from '../hooks/model'
 import { drawScene, layout, stationOrigin } from '../hooks/scene'
-import { rasterCells, sceneSvg, SVG_LIMIT } from '../hooks/paint'
+import { quadrantCell, rasterCells, sceneSvg, SVG_LIMIT } from '../hooks/paint'
 
 const PLUGIN = 'factory-view'
 
@@ -56,14 +56,30 @@ describe('the floor plan', () => {
     expect(lay.rows).toBe(3)
   })
 
-  test('small desks take less room than large ones', () => {
-    const small = layout(9, 3, { art: 'small' })
-    const large = layout(9, 3)
-    expect(small.deskW).toBeLessThan(large.deskW)
-    expect(small.width).toBeLessThan(large.width)
-    expect(small.height).toBeLessThan(large.height)
-    expect(small.height % 2).toBe(0)
-    expect(stationOrigin(small, 8)!.y % 2).toBe(0)
+  test('each terminal size takes less room than the one above it', () => {
+    const cells = (art: 'large' | 'medium' | 'small') => {
+      const lay = layout(9, 3, { art })
+      return { columns: lay.isQuad ? lay.width / 2 : lay.width, rows: lay.height / 2, lay }
+    }
+    const [large, medium, small] = [cells('large'), cells('medium'), cells('small')]
+    expect(medium.columns).toBeLessThan(large.columns)
+    expect(small.columns).toBeLessThan(medium.columns)
+    expect(medium.rows).toBeLessThan(large.rows)
+    expect(small.rows).toBeLessThan(medium.rows)
+    for (const { lay } of [large, medium, small]) {
+      // Desks start on even rows so name tags keep to whole cells, and on
+      // even columns too where a cell is two pixels wide.
+      expect(stationOrigin(lay, 8)!.y % 2).toBe(0)
+      if (lay.isQuad) expect(stationOrigin(lay, 8)!.x % 2).toBe(0)
+    }
+  })
+
+  test('a quarter-block cell paints its two commonest colors', () => {
+    const [a, b, c] = [0x111111, 0xeeeeee, 0xdddddd]
+    expect(quadrantCell([a, a, b, b])).toEqual({ ch: 0x2584, fg: b, bg: a })
+    expect(quadrantCell([a, a, a, b])).toEqual({ ch: 0x2597, fg: b, bg: a })
+    expect(quadrantCell([a, a, a, a]).ch).toBe(0x20)
+    expect(quadrantCell([a, b, c, a]).ch).toBe(0x259e)
   })
 
   test('a flat pane spends width before height', () => {
@@ -280,16 +296,20 @@ describe('the pane', () => {
     await ui.unmount()
   })
 
-  test('the terminal draws small agents unless asked for large ones', async ($, on) => {
+  test('the terminal draws medium agents unless asked for small or large ones', async ($, on) => {
     engine(on, [])
     const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-    expect((await ui.find({ type: 'Raster' }))?.props.columns).toBe(66)
-    expect((await ui.find({ key: 'size' }))?.props.label).toBe('Size: small')
-    const { text } = await $.command.run(factory('size large'))
-    expect(text).toContain('large')
-    expect((await ui.find({ type: 'Raster' }))?.props.columns).toBe(80)
+    const columns = async () => (await ui.find({ type: 'Raster' }))?.props.columns
+    expect(await columns()).toBe(42)
+    expect((await ui.find({ key: 'size' }))?.props.label).toBe('Size: medium')
+    const { text } = await $.command.run(factory('size small'))
+    expect(text).toContain('small')
+    expect(await columns()).toBe(30)
     await ui.press({ key: 'size' })
-    expect((await ui.find({ type: 'Raster' }))?.props.columns).toBe(66)
+    expect(await columns()).toBe(42)
+    await ui.press({ key: 'size' })
+    expect(await columns()).toBe(66)
+    expect((await $.command.run(factory('size huge'))).text).toContain('Usage')
     await ui.unmount()
   })
 

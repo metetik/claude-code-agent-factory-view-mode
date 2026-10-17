@@ -35,6 +35,7 @@ import {
   drawScene,
   layout,
   sceneHotspots,
+  labelChars,
   sceneLabels,
   seatsNeeded,
   type SceneAgent,
@@ -50,13 +51,14 @@ const RECONCILE_MS = 2000
 /** Desks across on the remote surfaces, which scale the picture to fit. */
 const REMOTE_COLS = 7
 /** CSS pixels per picture pixel on the remote surfaces, by agent size. */
-const REMOTE_SCALE: Record<AgentSize, number> = { small: 2, large: 3 }
+const REMOTE_SCALE: Record<AgentSize, number> = { small: 1, medium: 1.5, large: 2 }
+const SIZES: AgentSize[] = ['small', 'medium', 'large']
 
 const AGENTS = { plugin: 'factory-view', key: 'agents' } as const
 const agentsAtom = atom(AGENTS, [])
 const stylesAtom = atom({ plugin: 'factory-view', key: 'styles' } as const, {})
 const looksAtom = atom({ plugin: 'factory-view', key: 'looks' } as const, 'random')
-const sizeAtom = atom({ plugin: 'factory-view', key: 'size' } as const, 'small')
+const sizeAtom = atom({ plugin: 'factory-view', key: 'size' } as const, 'medium')
 const selectedAtom = atom({ plugin: 'factory-view', key: 'selected' } as const, null)
 const scopeAtom = atom({ plugin: 'factory-view', key: 'scope' } as const, 'agent')
 const demoAtom = atom({ plugin: 'factory-view', key: 'isDemo' } as const, false)
@@ -188,7 +190,7 @@ async function tick($: Engine): Promise<void> {
     const scene = sceneOf(agents, await wardrobeOf($))
     const selected = agents.find(a => a.id === selectedId)
     const lay = layout(seatsNeeded(scene), at.maxCols, { isFlat: at.isFlat, spacing: 'snug', art: at.size })
-    const picture = rasterCells(drawScene(lay, scene, frame, selected?.seat), sceneLabels(lay, scene, lay.deskW - 2))
+    const picture = rasterCells(drawScene(lay, scene, frame, selected?.seat), sceneLabels(lay, scene, labelChars(lay)), lay.isQuad)
     if (picture.columns !== at.columns || picture.rows !== at.rows) return
     await $.ui.blit({ requestId: PANE, key: RASTER, cells: picture.cells, columns: picture.columns, rows: picture.rows })
   } finally {
@@ -461,8 +463,8 @@ function controls(
           />
           <Button
             key="size"
-            label={size === 'small' ? 'Size: small' : 'Size: large'}
-            onPress={() => setSize($, size === 'small' ? 'large' : 'small')}
+            label={`Size: ${size}`}
+            onPress={() => setSize($, cycle(SIZES, size))}
           />
           {hasFinished && (
             <Button key="clear-finished" label="Send finished agents home" onPress={() => mutate($, list => clearFinished(list))} />
@@ -478,7 +480,7 @@ const HELP = [
   '/factory-view style <who> color=<c> hat=<h> extra=<e> — dress the manager (main), every agent of a type, or one agent by its name tag',
   '/factory-view reset [who] — back to the default looks',
   '/factory-view looks random|type — how agents nobody dressed look: each its own by lot, or dressed for their type',
-  '/factory-view size small|large — how big the agents are drawn',
+  '/factory-view size small|medium|large — how big the agents are drawn',
   '/factory-view clear — send finished agents home',
   '/factory-view demo — add or remove pretend agents, to see the floor busy',
   '/factory-view options — list the colors, hats and extras',
@@ -540,8 +542,8 @@ async function runCommand($: Engine, args: string): Promise<string> {
       return `${target.name}: back to the default look.`
     }
     case 'size': {
-      const size = words[1]?.toLowerCase()
-      if (size !== 'small' && size !== 'large') return 'Usage: /factory-view size small|large'
+      const size = SIZES.find(one => one === words[1]?.toLowerCase())
+      if (size === undefined) return 'Usage: /factory-view size small|medium|large'
       await setSize($, size)
       return `The agents are drawn ${size} now.`
     }
@@ -616,8 +618,9 @@ export const register: Register = on => {
       if (isStyles(stored)) await update($, stylesAtom, current => ({ ...stored, ...current }))
       const looks = await $.store.get('looks')
       if (looks === 'random' || looks === 'type') await update($, looksAtom, () => looks)
-      const size = await $.store.get('size')
-      if (size === 'small' || size === 'large') await update($, sizeAtom, () => size)
+      const storedSize = await $.store.get('size')
+      const size = SIZES.find(one => one === storedSize)
+      if (size !== undefined) await update($, sizeAtom, () => size)
       await mutate($, agents => agents)
     })
     await quietly($, 'command', () =>
@@ -706,7 +709,7 @@ export const register: Register = on => {
       const isFlat = e.props.placement === 'inline'
       const maxCols = colsFor(width, 'snug', size)
       const lay = layout(seats, maxCols, { isFlat, spacing: 'snug', art: size })
-      const picture = rasterCells(drawScene(lay, scene, frame, selected?.seat), sceneLabels(lay, scene, lay.deskW - 2))
+      const picture = rasterCells(drawScene(lay, scene, frame, selected?.seat), sceneLabels(lay, scene, labelChars(lay)), lay.isQuad)
       mounted = { columns: picture.columns, rows: picture.rows, maxCols, isFlat, size }
 
       return (

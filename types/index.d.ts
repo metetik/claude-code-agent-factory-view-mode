@@ -86,7 +86,7 @@ export type AgentStyle = { color: ColorName; hat: HatName; accessory: AccessoryN
 export type LooksMode = 'random' | 'type'
 
 /** How big the agents are drawn. */
-export type AgentSize = 'small' | 'large'
+export type AgentSize = 'small' | 'medium' | 'large'
 
 declare module 'claude-code' {
   interface PluginState {
