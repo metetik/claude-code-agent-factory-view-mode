@@ -17,14 +17,14 @@ import {
 import { drawScene, layout, stationOrigin } from '../hooks/scene'
 import { rasterCells, sceneSvg, SVG_LIMIT } from '../hooks/paint'
 
-const PLUGIN = 'agent-factory'
+const PLUGIN = 'factory-view'
 
 const PANE = {
   plugin: PLUGIN,
   component: 'Pane',
-  requestId: 'agent-factory',
+  requestId: 'factory-view',
   props: {
-    title: 'Agent Factory',
+    title: 'Factory View',
     isFocused: false,
     bodyColumns: 80,
     placement: 'dock',
@@ -142,9 +142,9 @@ function engine(on: On, agents: AgentInfo[]): void {
   on('turn.complete', ($, e) => ({ text: e.answer }))
 }
 
-/** `/factory <args>` typed at the prompt. */
+/** `/factory-view <args>` typed at the prompt. */
 const factory = (args: string) =>
-  ({ command: 'factory', args, origin: { kind: 'composer' }, presentation: { isFullscreen: true, columns: 120 } }) as const
+  ({ command: 'factory-view', args, origin: { kind: 'composer' }, presentation: { isFullscreen: true, columns: 120 } }) as const
 
 /** What the legend says of one agent: its line's text, every part of it. */
 async function legendLine(ui: { find: (q: { key: string }) => Promise<{ children: unknown[] } | undefined> }, id: string) {
@@ -196,7 +196,7 @@ describe('the session', () => {
     await ui.unmount()
   })
 
-  test('/factory style dresses every agent of a type', async ($, on) => {
+  test('/factory-view style dresses every agent of a type', async ($, on) => {
     engine(on, [explorer])
     const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
     await $.turn.start({ text: 'Map it', turnId: 't1', agentId: 'agent-1' })
@@ -293,7 +293,7 @@ describe('the pane', () => {
     await ui.unmount()
   })
 
-  test('/factory looks switches how undressed agents look', async ($, on) => {
+  test('/factory-view looks switches how undressed agents look', async ($, on) => {
     engine(on, [])
     const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
     expect((await ui.find({ key: 'looks' }))?.props.label).toBe('Undressed agents: random looks')

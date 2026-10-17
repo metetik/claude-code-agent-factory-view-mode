@@ -1,5 +1,5 @@
 {
-  "name": "agent-factory",
+  "name": "factory-view",
   "version": "0.1.0",
   "description": "Watch Claude and its subagents work at their desks on a pixel-art factory floor, and dress them up.",
   "author": {

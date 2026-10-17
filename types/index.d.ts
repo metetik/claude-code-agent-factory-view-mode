@@ -27,7 +27,7 @@ export type FactoryAgent = {
   toolCount: number
   /** A named member of the session's team: it waits for messages between turns. */
   isTeammate: boolean
-  /** One of `/factory demo`'s pretend agents. */
+  /** One of `/factory-view demo`'s pretend agents. */
   isDemo: boolean
 }
 
@@ -90,7 +90,7 @@ export type AgentSize = 'small' | 'large'
 
 declare module 'claude-code' {
   interface PluginState {
-    'agent-factory': {
+    'factory-view': {
       agents: FactoryAgent[]
       /** Keyed by `main`, `type:<subagent type>` or `agent:<agent id>`. */
       styles: Record<string, AgentStyle>

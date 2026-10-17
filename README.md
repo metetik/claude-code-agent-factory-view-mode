@@ -1,4 +1,4 @@
-# Agent Factory
+# Factory View
 
 A Claude Code mod that turns orchestration into a little pixel-art office. Claude, the
 main agent, is the manager at the gilded desk in the middle of the floor; every subagent
@@ -33,7 +33,7 @@ times a second. There every pixel takes a whole cell, so the terminal has a smal
 pictures of its own: the same mascot, hats and extras on desks two thirds the size (agents
 8 cells wide instead of 12). Claude Code Desktop and the mobile app draw the floor as an
 animated SVG with room between the desks; hover a desk there for what that agent is doing.
-**Size** under the legend, or `/factory size`, switches between small and large.
+**Size** under the legend, or `/factory-view size`, switches between small and large.
 
 ## Using it
 
@@ -53,14 +53,14 @@ that agent.
 
 | Command | Does |
 | --- | --- |
-| `/factory` | open or close the pane (closing it keeps it closed in later sessions) |
-| `/factory style <who> color=<c> hat=<h> extra=<e>` | dress the manager (`main`), every agent of a type (`Explore`, `Plan`, ...), or one agent by its name tag |
-| `/factory reset [who]` | back to the default looks |
-| `/factory looks random\|type` | how agents nobody dressed look: each its own by lot, or dressed for their type |
-| `/factory size small\|large` | how big the agents are drawn (small by default) |
-| `/factory clear` | send finished agents home |
-| `/factory demo` | add (or remove) six pretend agents, to see a busy floor |
-| `/factory options` | list the colors, hats and extras |
+| `/factory-view` | open or close the pane (closing it keeps it closed in later sessions) |
+| `/factory-view style <who> color=<c> hat=<h> extra=<e>` | dress the manager (`main`), every agent of a type (`Explore`, `Plan`, ...), or one agent by its name tag |
+| `/factory-view reset [who]` | back to the default looks |
+| `/factory-view looks random\|type` | how agents nobody dressed look: each its own by lot, or dressed for their type |
+| `/factory-view size small\|large` | how big the agents are drawn (small by default) |
+| `/factory-view clear` | send finished agents home |
+| `/factory-view demo` | add (or remove) six pretend agents, to see a busy floor |
+| `/factory-view options` | list the colors, hats and extras |
 
 ## How it works
 
@@ -71,7 +71,7 @@ that agent.
 
 | File | Holds |
 | --- | --- |
-| `hooks/register.tsx` | the hooks: events, the pane, the `/factory` command, the animation ticker |
+| `hooks/register.tsx` | the hooks: events, the pane, the `/factory-view` command, the animation ticker |
 | `hooks/model.ts` | agents, desks, status changes and styles, as plain functions |
 | `hooks/scene.ts` | the floor plan and the pixel painter |
 | `hooks/sprites.ts` | colors, hats, extras and icons, drawn as strings |

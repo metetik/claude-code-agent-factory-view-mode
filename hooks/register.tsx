@@ -41,8 +41,8 @@ import {
 } from './scene'
 import { ACCESSORY_NAMES, COLORS, COLOR_NAMES, HAT_NAMES, hex, prettyName } from './sprites'
 
-const PANE = 'agent-factory'
-const TITLE = 'Agent Factory'
+const PANE = 'factory-view'
+const TITLE = 'Factory View'
 const RASTER = 'floor'
 /** One animation frame; the SVG plays its frames at the same pace. */
 const TICK_MS = 250
@@ -52,14 +52,14 @@ const REMOTE_COLS = 7
 /** CSS pixels per picture pixel on the remote surfaces, by agent size. */
 const REMOTE_SCALE: Record<AgentSize, number> = { small: 2, large: 3 }
 
-const AGENTS = { plugin: 'agent-factory', key: 'agents' } as const
+const AGENTS = { plugin: 'factory-view', key: 'agents' } as const
 const agentsAtom = atom(AGENTS, [])
-const stylesAtom = atom({ plugin: 'agent-factory', key: 'styles' } as const, {})
-const looksAtom = atom({ plugin: 'agent-factory', key: 'looks' } as const, 'random')
-const sizeAtom = atom({ plugin: 'agent-factory', key: 'size' } as const, 'small')
-const selectedAtom = atom({ plugin: 'agent-factory', key: 'selected' } as const, null)
-const scopeAtom = atom({ plugin: 'agent-factory', key: 'scope' } as const, 'agent')
-const demoAtom = atom({ plugin: 'agent-factory', key: 'isDemo' } as const, false)
+const stylesAtom = atom({ plugin: 'factory-view', key: 'styles' } as const, {})
+const looksAtom = atom({ plugin: 'factory-view', key: 'looks' } as const, 'random')
+const sizeAtom = atom({ plugin: 'factory-view', key: 'size' } as const, 'small')
+const selectedAtom = atom({ plugin: 'factory-view', key: 'selected' } as const, null)
+const scopeAtom = atom({ plugin: 'factory-view', key: 'scope' } as const, 'agent')
+const demoAtom = atom({ plugin: 'factory-view', key: 'isDemo' } as const, false)
 
 type Engine = EngineInterface
 /** What every surface draws with; `Select` where the surface has one (not mobile yet). */
@@ -82,7 +82,7 @@ async function quietly($: Engine, what: string, work: () => Promise<unknown>): P
   try {
     await work()
   } catch (error) {
-    $.ui.log(`agent-factory: ${what} failed: ${String(error)}`, { to: 'debug' })
+    $.ui.log(`factory-view: ${what} failed: ${String(error)}`, { to: 'debug' })
   }
 }
 
@@ -474,19 +474,19 @@ function controls(
 }
 
 const HELP = [
-  '/factory — open or close the Agent Factory pane',
-  '/factory style <who> color=<c> hat=<h> extra=<e> — dress the manager (main), every agent of a type, or one agent by its name tag',
-  '/factory reset [who] — back to the default looks',
-  '/factory looks random|type — how agents nobody dressed look: each its own by lot, or dressed for their type',
-  '/factory size small|large — how big the agents are drawn',
-  '/factory clear — send finished agents home',
-  '/factory demo — add or remove pretend agents, to see the floor busy',
-  '/factory options — list the colors, hats and extras',
+  '/factory-view — open or close the Factory View pane',
+  '/factory-view style <who> color=<c> hat=<h> extra=<e> — dress the manager (main), every agent of a type, or one agent by its name tag',
+  '/factory-view reset [who] — back to the default looks',
+  '/factory-view looks random|type — how agents nobody dressed look: each its own by lot, or dressed for their type',
+  '/factory-view size small|large — how big the agents are drawn',
+  '/factory-view clear — send finished agents home',
+  '/factory-view demo — add or remove pretend agents, to see the floor busy',
+  '/factory-view options — list the colors, hats and extras',
 ].join('\n')
 
 type Target = { agent: Pick<FactoryAgent, 'id' | 'isMain' | 'type'>; scope: StyleScope; name: string }
 
-/** Who a `/factory style` names: the manager, a type on the floor, an agent by its name tag, or any type. */
+/** Who a `/factory-view style` names: the manager, a type on the floor, an agent by its name tag, or any type. */
 function targetOf(word: string, agents: readonly FactoryAgent[]): Target {
   if (/^(main|manager|claude|boss)$/i.test(word)) return { agent: mainAgent(0), scope: 'type', name: 'The manager' }
   const lower = word.toLowerCase()
@@ -507,11 +507,11 @@ async function runCommand($: Engine, args: string): Promise<string> {
     if (verb !== 'open' && pane?.isShown === true) {
       await $.store.set('isClosed', true)
       await $.ui.close({ id: PANE })
-      return 'Agent Factory closed; /factory opens it again.'
+      return 'Factory View closed; /factory-view opens it again.'
     }
     await $.store.set('isClosed', false)
     const opened = await $.ui.open({ id: PANE, title: TITLE })
-    return opened.isPlaced ? 'Agent Factory is open.' : `Agent Factory could not open: ${opened.reason}`
+    return opened.isPlaced ? 'Factory View is open.' : `Factory View could not open: ${opened.reason}`
   }
 
   const agents = withMain(await read($, agentsAtom), await $.clock.now())
@@ -519,9 +519,9 @@ async function runCommand($: Engine, args: string): Promise<string> {
   switch (verb) {
     case 'style': {
       const who = words[1]
-      if (who === undefined || words.length < 3) return `Usage: /factory style <who> color=<c> hat=<h> extra=<e>\n\n${HELP}`
+      if (who === undefined || words.length < 3) return `Usage: /factory-view style <who> color=<c> hat=<h> extra=<e>\n\n${HELP}`
       const parsed = parseStyle(words.slice(2))
-      if ('error' in parsed) return `Unknown style "${parsed.error}". /factory options lists them.`
+      if ('error' in parsed) return `Unknown style "${parsed.error}". /factory-view options lists them.`
       const target = targetOf(who, agents)
       await restyle($, target.agent, target.scope, style => ({ ...style, ...parsed.change }))
       const { styles, looks } = await wardrobeOf($)
@@ -541,13 +541,13 @@ async function runCommand($: Engine, args: string): Promise<string> {
     }
     case 'size': {
       const size = words[1]?.toLowerCase()
-      if (size !== 'small' && size !== 'large') return 'Usage: /factory size small|large'
+      if (size !== 'small' && size !== 'large') return 'Usage: /factory-view size small|large'
       await setSize($, size)
       return `The agents are drawn ${size} now.`
     }
     case 'looks': {
       const mode = words[1]?.toLowerCase()
-      if (mode !== 'random' && mode !== 'type') return 'Usage: /factory looks random|type'
+      if (mode !== 'random' && mode !== 'type') return 'Usage: /factory-view looks random|type'
       await setLooks($, mode)
       return mode === 'random'
         ? 'Agents nobody dressed now each get a look by lot.'
@@ -563,7 +563,7 @@ async function runCommand($: Engine, args: string): Promise<string> {
       }
       await startDemo($)
       await $.ui.open({ id: PANE, title: TITLE })
-      return 'Six pretend agents joined the floor; /factory demo sends them home.'
+      return 'Six pretend agents joined the floor; /factory-view demo sends them home.'
     case 'options':
       return [
         `Colors: ${COLOR_NAMES.join(', ')}`,
@@ -622,8 +622,8 @@ export const register: Register = on => {
     })
     await quietly($, 'command', () =>
       $.command.register({
-        name: 'factory',
-        description: 'Agent Factory: watch your agents work at their desks, and dress them up',
+        name: 'factory-view',
+        description: 'Factory View: watch your agents work at their desks, and dress them up',
         argumentHint: '[style <who> color=… hat=… extra=… | reset | clear | demo | options]',
       }),
     )
@@ -686,7 +686,7 @@ export const register: Register = on => {
     return next(e)
   })
 
-  on('command.run', { command: 'factory' }, async ($, e) => ({ text: await runCommand($, e.args) }))
+  on('command.run', { command: 'factory-view' }, async ($, e) => ({ text: await runCommand($, e.args) }))
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const agents = withMain(await read($, agentsAtom), 0)
