@@ -1,0 +1,76 @@
+# Agent Factory
+
+A Claude Code mod that turns orchestration into a little pixel-art office. Claude, the
+main agent, is the manager at the gilded desk in the middle of the floor; every subagent
+it starts gets a desk of its own around it. Agents at work type away while their monitor
+scrolls and a thought bubble shows the kind of tool they run; agents with nothing to do
+look around, doze off with a stream of Zzz, or put their feet up with a green check once
+their task is done.
+
+Every agent is the Claude Code mascot, and each one can be dressed up: 14 body colors,
+18 hats (crown, top hat, wizard hat, hard hat, propeller cap, headphones, viking helmet,
+...) and 8 extras (glasses, shades, monocle, tie, bow tie, mustache, scarf, blush).
+
+## What you see
+
+| On the floor | Means |
+| --- | --- |
+| Arms typing, code scrolling on the monitor, a bubble with an icon | working: the icon is the tool (magnifier for reading and searching, pencil for edits, a terminal for Bash, a globe for the web, a little mascot for delegating, a checklist for todos, `...` for thinking) |
+| Eyes looking around, a bubble of dots | waiting: the manager waits for you; a subagent waits to start or for a message |
+| Eyes closed, Zzz rising, screensaver | sleeping: idle for a while |
+| Happy eyes, arms up, a green check | done: the task came back |
+| X eyes, a red `!`, a red screen | failed |
+
+The manager dozes off 90 seconds after the last turn ends; a finished subagent cheers for
+20 seconds and then naps at its desk, check mark and all. Desks fill nearest the manager
+first; when 24 are taken, the agent that finished longest ago goes home to make room.
+
+The terminal draws the floor with half-block characters, two pixels a cell, repainted four
+times a second. Claude Code Desktop and the mobile app draw it as an animated SVG; hover a
+desk there for what that agent is doing.
+
+## Using it
+
+The pane opens by itself when a session starts. Under the floor is a legend, one line per
+agent: pick one to style it (the style applies to the manager, or to every agent of that
+subagent type) and press **Color**, **Hat** or **Extra** to cycle, **Shuffle** for a random
+look, **Reset** for the default, **Transcript** to open that subagent's transcript.
+Styles are remembered across sessions.
+
+| Command | Does |
+| --- | --- |
+| `/factory` | open or close the pane (closing it keeps it closed in later sessions) |
+| `/factory style <who> color=<c> hat=<h> extra=<e>` | style the manager (`main`) or every agent of a type (`Explore`, `Plan`, ...) |
+| `/factory reset [who]` | back to the default looks |
+| `/factory clear` | send finished agents home |
+| `/factory demo` | add (or remove) six pretend agents, to see a busy floor |
+| `/factory options` | list the colors, hats and extras |
+
+## How it works
+
+`hooks/register.tsx` follows the session: `turn.start` and `turn.complete` for each loop
+(the main one and every subagent's), `tool.call` for the tool each agent runs, and
+`$.agent.list()` every two seconds to catch anything missed. What it learns lives in
+`$.state`, so the pane redraws on every change and survives a reload.
+
+| File | Holds |
+| --- | --- |
+| `hooks/register.tsx` | the hooks: events, the pane, the `/factory` command, the animation ticker |
+| `hooks/model.ts` | agents, desks, status changes and styles, as plain functions |
+| `hooks/scene.ts` | the floor plan and the pixel painter |
+| `hooks/sprites.ts` | colors, hats, extras and icons, drawn as strings |
+| `hooks/paint.ts` | the picture as terminal cells, and as an SVG with its frames |
+| `types/index.d.ts` | the shape of the mod's state |
+| `tests/factory.test.ts` | the floor plan, the agents, the session and the pane |
+
+## Developing
+
+```sh
+claude plugin validate .
+claude plugin test .
+claude --plugin-dir .            # a session with the mod loaded from this folder
+bun scripts/preview.ts out 8 5   # the floor with 8 agents as SVG and ANSI, outside a session
+```
+
+`tsc -p .` type-checks the mod once Claude Code has loaded it from this folder, which lays
+the API's declarations in `.claude-plugin/types/`.

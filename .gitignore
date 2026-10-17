@@ -1,0 +1,5 @@
+# Written by Claude Code each time it loads the mod from a folder it watches.
+.claude-plugin/types/
+node_modules/
+.DS_Store
+*.log

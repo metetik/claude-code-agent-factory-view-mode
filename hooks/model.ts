@@ -1,0 +1,271 @@
+import type { AccessoryName, AgentStatus, AgentStyle, ColorName, FactoryAgent, HatName } from '../types'
+import { ACCESSORY_NAMES, COLOR_NAMES, HAT_NAMES } from './sprites'
+
+export const MAIN_ID = 'main'
+/** Desks beyond the manager's before finished agents are sent home. */
+export const MAX_DESKS = 24
+/** How long the manager waits for the person before dozing off. */
+export const MAIN_DOZE_MS = 90_000
+/** How long a finished agent cheers before it dozes off. */
+export const DONE_DOZE_MS = 20_000
+/** How long a teammate waits for a message before dozing off. */
+export const IDLE_DOZE_MS = 60_000
+
+export function mainAgent(now: number): FactoryAgent {
+  return {
+    id: MAIN_ID,
+    isMain: true,
+    type: 'main',
+    label: 'Claude',
+    description: 'The main conversation: hands out the work.',
+    status: 'waiting',
+    outcome: null,
+    tool: null,
+    detail: null,
+    toolId: null,
+    since: now,
+    seat: 0,
+    toolCount: 0,
+    isTeammate: false,
+    isDemo: false,
+  }
+}
+
+export function withMain(agents: readonly FactoryAgent[], now: number): FactoryAgent[] {
+  return agents.some(a => a.id === MAIN_ID) ? [...agents] : [mainAgent(now), ...agents]
+}
+
+const isFinished = (a: FactoryAgent) => !a.isMain && (a.status === 'done' || a.status === 'failed' || a.status === 'sleeping')
+
+/** The lowest desk nobody sits at. */
+export function freeSeat(agents: readonly FactoryAgent[]): number {
+  const taken = new Set(agents.map(a => a.seat))
+  let seat = 1
+  while (taken.has(seat)) seat++
+
+  return seat
+}
+
+export type NewAgent = Pick<FactoryAgent, 'id' | 'type' | 'label' | 'description'> &
+  Partial<Pick<FactoryAgent, 'status' | 'isDemo' | 'isTeammate'>>
+
+/**
+ * Seats a new agent at the nearest free desk; when the floor is full, the
+ * agent that finished longest ago goes home to make room.
+ */
+export function addAgent(agents: readonly FactoryAgent[], init: NewAgent, now: number): FactoryAgent[] {
+  if (agents.some(a => a.id === init.id)) return [...agents]
+  let list = [...agents]
+  if (freeSeat(list) > MAX_DESKS) {
+    const oldest = list.filter(isFinished).sort((a, b) => a.since - b.since)[0]
+    if (oldest !== undefined) list = list.filter(a => a.id !== oldest.id)
+  }
+  const agent: FactoryAgent = {
+    ...mainAgent(now),
+    id: init.id,
+    isMain: false,
+    type: init.type,
+    label: init.label,
+    description: init.description,
+    status: init.status ?? 'working',
+    seat: freeSeat(list),
+    isTeammate: init.isTeammate ?? false,
+    isDemo: init.isDemo ?? false,
+  }
+
+  return [...list, agent]
+}
+
+export function patchAgent(
+  agents: readonly FactoryAgent[],
+  id: string,
+  change: (agent: FactoryAgent) => FactoryAgent,
+): FactoryAgent[] {
+  return agents.map(a => (a.id === id ? change(a) : a))
+}
+
+export function setStatus(agent: FactoryAgent, status: AgentStatus, now: number): FactoryAgent {
+  if (agent.status === status) return agent
+  const outcome = status === 'done' ? 'ok' : status === 'failed' ? 'failed' : status === 'working' ? null : agent.outcome
+
+  return { ...agent, status, outcome, since: now, ...(status === 'working' ? {} : { tool: null, detail: null, toolId: null }) }
+}
+
+export function startTool(agent: FactoryAgent, tool: string, toolId: string, detail: string | null, now: number): FactoryAgent {
+  return { ...setStatus(agent, 'working', now), tool, toolId, detail, toolCount: agent.toolCount + 1 }
+}
+
+export function endTool(agent: FactoryAgent, toolId: string): FactoryAgent {
+  return agent.toolId === toolId ? { ...agent, tool: null, toolId: null, detail: null } : agent
+}
+
+/** Moves on whoever has waited, cheered or idled long enough; null when nobody moved. */
+export function settle(agents: readonly FactoryAgent[], now: number): FactoryAgent[] | null {
+  let isChanged = false
+  const next = agents.map(a => {
+    const waited = now - a.since
+    const dozes =
+      (a.isMain && a.status === 'waiting' && waited > MAIN_DOZE_MS) ||
+      (!a.isMain && a.status === 'done' && waited > DONE_DOZE_MS) ||
+      (!a.isMain && a.status === 'waiting' && waited > IDLE_DOZE_MS)
+    if (!dozes) return a
+    isChanged = true
+
+    return { ...setStatus(a, 'sleeping', now), outcome: a.outcome }
+  })
+
+  return isChanged ? next : null
+}
+
+export function clearFinished(agents: readonly FactoryAgent[]): FactoryAgent[] {
+  return agents.filter(a => !isFinished(a))
+}
+
+/** Where an agent's style is kept: one style per subagent type, one for the manager. */
+export function styleKey(agent: Pick<FactoryAgent, 'isMain' | 'type'>): string {
+  return agent.isMain ? 'main' : `type:${agent.type}`
+}
+
+const KNOWN: Record<string, AgentStyle> = {
+  main: { color: 'clay', hat: 'crown', accessory: 'tie' },
+  Explore: { color: 'sky', hat: 'explorer', accessory: 'none' },
+  'general-purpose': { color: 'mint', hat: 'hardhat', accessory: 'none' },
+  Plan: { color: 'grape', hat: 'wizard', accessory: 'glasses' },
+  'claude-code-guide': { color: 'teal', hat: 'gradcap', accessory: 'glasses' },
+  'statusline-setup': { color: 'rose', hat: 'propeller', accessory: 'blush' },
+  fork: { color: 'clay', hat: 'cap', accessory: 'none' },
+}
+
+function hash(text: string): number {
+  let h = 2166136261
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i)
+    h = Math.imul(h, 16777619) >>> 0
+  }
+
+  return h
+}
+
+/** A look of its own for every agent type, the same every session. */
+export function defaultStyle(agent: Pick<FactoryAgent, 'isMain' | 'type'>): AgentStyle {
+  const known = KNOWN[agent.isMain ? 'main' : agent.type]
+  if (known !== undefined) return known
+  const h = hash(agent.type)
+  const colors = COLOR_NAMES.filter(c => c !== 'clay')
+  const hats = HAT_NAMES.filter(name => name !== 'none' && name !== 'crown')
+  const extras = ACCESSORY_NAMES
+
+  return {
+    color: colors[h % colors.length]!,
+    hat: hats[(h >>> 8) % hats.length]!,
+    accessory: (h >>> 16) % 3 === 0 ? extras[(h >>> 20) % extras.length]! : 'none',
+  }
+}
+
+export function styleOf(agent: Pick<FactoryAgent, 'isMain' | 'type'>, styles: Record<string, AgentStyle>): AgentStyle {
+  return styles[styleKey(agent)] ?? defaultStyle(agent)
+}
+
+export function cycle<T>(list: readonly T[], current: T, step = 1): T {
+  const at = list.indexOf(current)
+
+  return list[(at + step + list.length) % list.length]!
+}
+
+export function randomStyle(seed: number): AgentStyle {
+  const pick = <T>(list: readonly T[], n: number) => list[Math.abs(n) % list.length]!
+  const h = hash(String(seed))
+
+  return {
+    color: pick(COLOR_NAMES, h),
+    hat: pick(HAT_NAMES, h >>> 7),
+    accessory: pick(ACCESSORY_NAMES, h >>> 15),
+  }
+}
+
+export type StyleField = 'color' | 'hat' | 'accessory'
+
+export const STYLE_CHOICES: { color: ColorName[]; hat: HatName[]; accessory: AccessoryName[] } = {
+  color: COLOR_NAMES,
+  hat: HAT_NAMES,
+  accessory: ACCESSORY_NAMES,
+}
+
+/**
+ * Reads `color=sky hat=crown extra=tie` (any order, `accessory` or `extra`)
+ * into a style change, or the first word it does not know.
+ */
+export function parseStyle(words: readonly string[]): { change: Partial<AgentStyle> } | { error: string } {
+  const change: Partial<AgentStyle> = {}
+  for (const word of words) {
+    const [rawKey, rawValue] = word.split('=')
+    const key = rawKey?.toLowerCase()
+    const value = rawValue?.toLowerCase() ?? ''
+    if (key === 'color' && (COLOR_NAMES as string[]).includes(value)) change.color = value as ColorName
+    else if (key === 'hat' && (HAT_NAMES as string[]).includes(value)) change.hat = value as HatName
+    else if ((key === 'extra' || key === 'accessory') && (ACCESSORY_NAMES as string[]).includes(value))
+      change.accessory = value as AccessoryName
+    else return { error: word }
+  }
+
+  return { change }
+}
+
+/** A few words on what a tool call works on, read off its input. */
+export function toolDetail(tool: string, input: Record<string, unknown>): string | null {
+  const text = (key: string) => (typeof input[key] === 'string' ? (input[key] as string) : undefined)
+  const base = (path: string | undefined) => path?.split(/[\\/]/).filter(Boolean).pop()
+  const detail =
+    text('description') ??
+    text('command') ??
+    base(text('file_path')) ??
+    base(text('notebook_path')) ??
+    text('pattern') ??
+    text('query') ??
+    hostOf(text('url')) ??
+    text('skill') ??
+    text('subject')
+  if (detail === undefined || detail.trim() === '') return tool === 'Agent' ? 'delegating' : null
+
+  return detail.replace(/\s+/g, ' ').trim().slice(0, 60)
+}
+
+function hostOf(url: string | undefined): string | undefined {
+  if (url === undefined) return undefined
+  try {
+    return new URL(url).host
+  } catch {
+    return url
+  }
+}
+
+/** The name on a subagent's desk: its call name, else the first words of its task, else its type. */
+export function labelFor(name: string | undefined, description: string, type: string): string {
+  if (name !== undefined && name !== '') return name
+  const words = description.trim().split(/\s+/).slice(0, 2).join(' ')
+
+  return words !== '' ? words : type
+}
+
+const STATUS_WORDS: Record<AgentStatus, string> = {
+  working: 'working',
+  waiting: 'waiting',
+  sleeping: 'sleeping',
+  done: 'done',
+  failed: 'failed',
+}
+
+/** One line on what an agent is doing, for the legend and the hover text. */
+export function describeAgent(agent: FactoryAgent): string {
+  const role = agent.isMain ? 'manager' : agent.type
+  const doing =
+    agent.status === 'working' && agent.tool !== null
+      ? `${agent.tool}${agent.detail !== null ? `: ${agent.detail}` : ''}`
+      : agent.status === 'working'
+        ? 'thinking'
+        : agent.status === 'sleeping' && agent.outcome === 'ok'
+          ? 'done, dozing'
+          : STATUS_WORDS[agent.status]
+
+  return `${agent.label} (${role}) · ${doing}`
+}
