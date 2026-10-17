@@ -56,6 +56,16 @@ describe('the floor plan', () => {
     expect(lay.rows).toBe(3)
   })
 
+  test('small desks take less room than large ones', () => {
+    const small = layout(9, 3, { art: 'small' })
+    const large = layout(9, 3)
+    expect(small.deskW).toBeLessThan(large.deskW)
+    expect(small.width).toBeLessThan(large.width)
+    expect(small.height).toBeLessThan(large.height)
+    expect(small.height % 2).toBe(0)
+    expect(stationOrigin(small, 8)!.y % 2).toBe(0)
+  })
+
   test('a flat pane spends width before height', () => {
     expect(layout(7, 7, { isFlat: true }).rows).toBe(1)
     expect(layout(7, 7).rows).toBe(3)
@@ -267,6 +277,19 @@ describe('the pane', () => {
     await ui.press({ key: 'style-done' })
     expect(await hatOf('agent-1')).toBe('chef')
     expect(await hatOf('agent-2')).toBe('chef')
+    await ui.unmount()
+  })
+
+  test('the terminal draws small agents unless asked for large ones', async ($, on) => {
+    engine(on, [])
+    const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+    expect((await ui.find({ type: 'Raster' }))?.props.columns).toBe(66)
+    expect((await ui.find({ key: 'size' }))?.props.label).toBe('Size: small')
+    const { text } = await $.command.run(factory('size large'))
+    expect(text).toContain('large')
+    expect((await ui.find({ type: 'Raster' }))?.props.columns).toBe(80)
+    await ui.press({ key: 'size' })
+    expect((await ui.find({ type: 'Raster' }))?.props.columns).toBe(66)
     await ui.unmount()
   })
 

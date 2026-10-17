@@ -272,10 +272,15 @@ function hostOf(url: string | undefined): string | undefined {
   }
 }
 
-/** The name on a subagent's desk: its call name, else the first words of its task, else its type. */
+/** The name on a subagent's desk: its call name, else the first words of its task that say something, else its type. */
 export function labelFor(name: string | undefined, description: string, type: string): string {
   if (name !== undefined && name !== '') return name
-  const words = description.trim().split(/\s+/).slice(0, 2).join(' ')
+  const words = description
+    .trim()
+    .split(/\s+/)
+    .filter(word => word !== '' && !/^(the|a|an|to|of|for|and|in|on|at|with)$/i.test(word))
+    .slice(0, 2)
+    .join(' ')
 
   return words !== '' ? words : type
 }

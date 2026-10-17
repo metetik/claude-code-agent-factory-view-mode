@@ -13,6 +13,7 @@ import {
   type IconName,
   type Sprite,
 } from './sprites'
+import { MINI_ACCESSORIES, MINI_BANG, MINI_BIG_Z, MINI_CHECK, MINI_HATS, MINI_ICONS, MINI_SMALL_Z } from './minis'
 
 /** A grid of opaque 0xRRGGBB pixels. */
 export class Canvas {
@@ -66,9 +67,17 @@ export type Hotspot = { x: number; y: number; width: number; height: number; tit
 
 export type SceneAgent = { agent: FactoryAgent; style: AgentStyle }
 
-export const STATION_W = 22
-export const STATION_H = 22
-const WALL_H = 10
+/**
+ * How big the pictures are: `large` where the picture is scaled, `small`
+ * for the terminal, where every pixel takes a whole character cell.
+ */
+export type Art = 'large' | 'small'
+
+/** Each desk's box, and the wall above them all, per size of picture. */
+const DESKS: Record<Art, { w: number; h: number; wall: number }> = {
+  large: { w: 22, h: 22, wall: 10 },
+  small: { w: 16, h: 16, wall: 6 },
+}
 const FLAT_WALL_H = 2
 
 /**
@@ -78,9 +87,10 @@ const FLAT_WALL_H = 2
  */
 export type Spacing = 'snug' | 'roomy'
 
-const SPACINGS: Record<Spacing, { gapX: number; gapY: number; margin: number; bottom: number }> = {
-  snug: { gapX: 4, gapY: 2, margin: 3, bottom: 2 },
-  roomy: { gapX: 10, gapY: 6, margin: 8, bottom: 6 },
+function spacingOf(spacing: Spacing, art: Art): { gapX: number; gapY: number; margin: number; bottom: number } {
+  return spacing === 'roomy'
+    ? { gapX: 10, gapY: 6, margin: 8, bottom: 6 }
+    : { gapX: art === 'small' ? 6 : 4, gapY: 2, margin: 3, bottom: 2 }
 }
 /** Frames in one loop of every animation; the SVG plays them at 4 a second. */
 export const FRAMES = 8
@@ -91,6 +101,10 @@ export type Layout = {
   /** Pixel rows of wall above the desks. */
   wall: number
   spacing: Spacing
+  art: Art
+  /** Each desk's box, in pixels. */
+  deskW: number
+  deskH: number
   /** Cell of each seat: seat 0, the manager's, sits in the middle. */
   cells: { col: number; row: number }[]
   width: number
@@ -98,17 +112,17 @@ export type Layout = {
 }
 
 /** How wide `cols` desks across are, in pixels. */
-export function sceneWidth(cols: number, spacing: Spacing = 'snug'): number {
-  const { gapX, margin } = SPACINGS[spacing]
+export function sceneWidth(cols: number, spacing: Spacing = 'snug', art: Art = 'large'): number {
+  const { gapX, margin } = spacingOf(spacing, art)
 
-  return margin * 2 + cols * STATION_W + (cols - 1) * gapX
+  return margin * 2 + cols * DESKS[art].w + (cols - 1) * gapX
 }
 
 /** How many desks fit across `width` pixels. */
-export function colsFor(width: number, spacing: Spacing = 'snug'): number {
-  const { gapX, margin } = SPACINGS[spacing]
+export function colsFor(width: number, spacing: Spacing = 'snug', art: Art = 'large'): number {
+  const { gapX, margin } = spacingOf(spacing, art)
 
-  return Math.max(1, Math.floor((width - margin * 2 + gapX) / (STATION_W + gapX)))
+  return Math.max(1, Math.floor((width - margin * 2 + gapX) / (DESKS[art].w + gapX)))
 }
 
 /**
@@ -120,7 +134,7 @@ export function colsFor(width: number, spacing: Spacing = 'snug'): number {
 export function layout(
   seatCount: number,
   maxCols: number,
-  { isFlat = false, spacing = 'snug' }: { isFlat?: boolean; spacing?: Spacing } = {},
+  { isFlat = false, spacing = 'snug', art = 'large' }: { isFlat?: boolean; spacing?: Spacing; art?: Art } = {},
 ): Layout {
   let cols: number
   let rows: number
@@ -169,17 +183,21 @@ export function layout(
     })
   }
 
-  const wall = isFlat ? FLAT_WALL_H : WALL_H
-  const { gapY, bottom } = SPACINGS[spacing]
+  const desk = DESKS[art]
+  const wall = isFlat ? FLAT_WALL_H : desk.wall
+  const { gapY, bottom } = spacingOf(spacing, art)
 
   return {
     cols,
     rows,
     wall,
     spacing,
+    art,
+    deskW: desk.w,
+    deskH: desk.h,
     cells,
-    width: sceneWidth(cols, spacing),
-    height: wall + rows * STATION_H + (rows - 1) * gapY + bottom,
+    width: sceneWidth(cols, spacing, art),
+    height: wall + rows * desk.h + (rows - 1) * gapY + bottom,
   }
 }
 
@@ -187,9 +205,9 @@ export function stationOrigin(lay: Layout, seat: number): { x: number; y: number
   const cell = lay.cells[seat]
   if (cell === undefined) return undefined
 
-  const { gapX, gapY, margin } = SPACINGS[lay.spacing]
+  const { gapX, gapY, margin } = spacingOf(lay.spacing, lay.art)
 
-  return { x: margin + cell.col * (STATION_W + gapX), y: lay.wall + cell.row * (STATION_H + gapY) }
+  return { x: margin + cell.col * (lay.deskW + gapX), y: lay.wall + cell.row * (lay.deskH + gapY) }
 }
 
 /** A small number per agent, so desks side by side do not move in step. */
@@ -240,23 +258,34 @@ function drawWall(c: Canvas, wall: number): void {
   c.rect(0, 0, c.width, wall, WALL)
   c.rect(0, 0, c.width, 1, WALL_DARK)
   c.rect(0, wall - 2, c.width, 2, BASEBOARD)
-  if (wall < WALL_H) return
-  const windows = Math.max(1, Math.floor((c.width - 8) / 26))
-  const step = c.width / windows
-  for (let i = 0; i < windows; i++) {
-    const x = Math.round(step * i + step / 2) - 5
-    c.rect(x, 2, 10, 5, 0x8892a6)
-    c.rect(x + 1, 3, 8, 3, 0x8ccbea)
-    c.set(x + 2, 3, 0xd8f0ff)
-    c.set(x + 3, 3, 0xd8f0ff)
-    c.set(x + 2, 4, 0xd8f0ff)
-    c.rect(x + 5, 3, 1, 3, 0x8892a6)
+  if (wall >= DESKS.large.wall) {
+    const windows = Math.max(1, Math.floor((c.width - 8) / 26))
+    const step = c.width / windows
+    for (let i = 0; i < windows; i++) {
+      const x = Math.round(step * i + step / 2) - 5
+      c.rect(x, 2, 10, 5, 0x8892a6)
+      c.rect(x + 1, 3, 8, 3, 0x8ccbea)
+      c.set(x + 2, 3, 0xd8f0ff)
+      c.set(x + 3, 3, 0xd8f0ff)
+      c.set(x + 2, 4, 0xd8f0ff)
+      c.rect(x + 5, 3, 1, 3, 0x8892a6)
+    }
+  } else if (wall >= DESKS.small.wall) {
+    const windows = Math.max(1, Math.floor((c.width - 6) / 20))
+    const step = c.width / windows
+    for (let i = 0; i < windows; i++) {
+      const x = Math.round(step * i + step / 2) - 3
+      c.rect(x, 1, 6, 3, 0x8892a6)
+      c.rect(x + 1, 2, 4, 1, 0x8ccbea)
+      c.set(x + 1, 2, 0xd8f0ff)
+    }
   }
 }
 
-function drawRug(c: Canvas, x: number, y: number): void {
-  c.rect(x - 2, y + 4, STATION_W + 4, STATION_H - 4, RUG_EDGE)
-  c.rect(x - 1, y + 5, STATION_W + 2, STATION_H - 6, RUG)
+function drawRug(c: Canvas, x: number, y: number, w: number, h: number): void {
+  const top = Math.round(h / 5)
+  c.rect(x - 2, y + top, w + 4, h - top, RUG_EDGE)
+  c.rect(x - 1, y + top + 1, w + 2, h - top - 2, RUG)
 }
 
 type Look = 'open' | 'left' | 'right' | 'closed' | 'happy' | 'dead'
@@ -313,11 +342,12 @@ function drawDesk(c: Canvas, x: number, y: number, isManager: boolean): void {
   const edge = isManager ? RUG_EDGE : 0xdba673
   const front = isManager ? 0x6b2c1a : 0x8f5d38
   const foot = isManager ? 0x4e1f12 : 0x6e4529
-  c.rect(x, y + 14, STATION_W, 2, top)
-  c.rect(x, y + 14, STATION_W, 1, edge)
-  c.rect(x, y + 16, STATION_W, 3, front)
-  c.rect(x, y + 18, STATION_W, 1, foot)
-  c.rect(x + 1, y + 19, STATION_W - 2, 1, shade(FLOOR_A, 0.75))
+  const w = DESKS.large.w
+  c.rect(x, y + 14, w, 2, top)
+  c.rect(x, y + 14, w, 1, edge)
+  c.rect(x, y + 16, w, 3, front)
+  c.rect(x, y + 18, w, 1, foot)
+  c.rect(x + 1, y + 19, w - 2, 1, shade(FLOOR_A, 0.75))
   if (isManager) {
     c.rect(x + 8, y + 16, 6, 2, RUG_EDGE)
     c.rect(x + 9, y + 16, 4, 1, 0xf6e7a8)
@@ -462,10 +492,168 @@ function drawStation(c: Canvas, x: number, y: number, seat: number, sceneAgent: 
   }
 
   if (agent.status === 'working') drawBubble(c, x, y, iconFor(agent.tool), t)
-  if (agent.status === 'waiting') drawBubble(c, x, y, 'think', Math.floor(t / 2))
+  if (agent.status === 'waiting') drawBubble(c, x, y, 'think', Math.min(2, Math.floor(t / 2)))
   if (agent.status === 'sleeping') drawSleep(c, x, y, t)
   if (agent.outcome === 'ok' && agent.status !== 'working') c.sprite(x + 1, y + 1, CHECK)
   if (agent.outcome === 'failed' && agent.status !== 'working') c.sprite(x + 2, y + 1, BANG)
+}
+
+const MINI_EYES: Record<Look, [number, number][]> = {
+  open: [[2, 1], [2, 2], [5, 1], [5, 2]],
+  left: [[1, 1], [1, 2], [4, 1], [4, 2]],
+  right: [[3, 1], [3, 2], [6, 1], [6, 2]],
+  closed: [[1, 2], [2, 2], [5, 2], [6, 2]],
+  happy: [[1, 2], [2, 1], [5, 1], [6, 2]],
+  dead: [[1, 1], [2, 2], [6, 1], [5, 2]],
+}
+
+/** The mascot for the small desks: a body 6 wide and 6 tall, eyes on rows 1 and 2, arms on row 3. */
+function drawMiniCharacter(
+  c: Canvas,
+  x: number,
+  y: number,
+  style: AgentStyle,
+  look: Look,
+  arms: [number, number],
+  t: number,
+): void {
+  const body = COLORS[style.color]
+  const dark = shade(body, 0.72)
+  c.rect(x + 1, y, 6, 5, body)
+  c.rect(x + 1, y + 5, 6, 1, dark)
+  for (const lx of [1, 3, 4, 6]) c.set(x + lx, y + 6, dark)
+  c.set(x, y + 3 + arms[0], body)
+  c.set(x + 7, y + 3 + arms[1], body)
+
+  const isOverEyes = style.accessory === 'shades'
+  if (style.accessory !== 'none' && !isOverEyes) c.sprite(x, y, MINI_ACCESSORIES[style.accessory])
+  for (const [ex, ey] of MINI_EYES[look]) c.set(x + ex, y + ey, INK.E!)
+  if (isOverEyes) c.sprite(x, y, MINI_ACCESSORIES.shades)
+  if (style.hat !== 'none') {
+    const hat = MINI_HATS[style.hat]
+    const frame = hat.frames[Math.floor(t / 2) % hat.frames.length]!
+    c.sprite(x, y - frame.length + hat.overlap, frame)
+  }
+}
+
+/** The small monitor's 3x2 screen, saying what the agent is up to. */
+function drawMiniScreen(c: Canvas, sx: number, sy: number, agent: FactoryAgent, t: number): void {
+  switch (agent.status) {
+    case 'working': {
+      const icon = iconFor(agent.tool)
+      if (icon === 'web') {
+        c.rect(sx, sy, 3, 2, 0xf3f4f6)
+        c.rect(sx, sy, 3, 1, 0x3f6fd8)
+        return
+      }
+      const isShell = icon === 'shell'
+      c.rect(sx, sy, 3, 2, isShell ? 0x0b0f14 : 0x1e2533)
+      for (let i = 0; i < 2; i++) {
+        const [indent, len, color] = CODE_ROWS[(t + i) % CODE_ROWS.length]!
+        const left = Math.min(indent, 1)
+        c.rect(sx + left, sy + i, Math.min(len, 3 - left), 1, isShell ? 0x6cc24a : color)
+      }
+      if (icon === 'search') c.rect(sx, sy + 1, 3, 1, 0xf7d84a)
+      return
+    }
+    case 'waiting':
+      c.rect(sx, sy, 3, 2, 0x1f2b44)
+      if (t % 4 < 2) c.set(sx, sy, 0xd7e6ff)
+      return
+    case 'failed':
+      c.rect(sx, sy, 3, 2, 0x5a1f22)
+      c.set(sx + 1, sy, INK.W!)
+      return
+    case 'done':
+      c.set(sx + 2, sy, INK.L!)
+      c.set(sx + 1, sy + 1, INK.L!)
+      return
+    case 'sleeping':
+      c.set(sx + (t % 3), sy + (t % 4 < 2 ? 0 : 1), 0x26324a)
+      return
+  }
+}
+
+/**
+ * One small desk, 16 by 16: the agent on rows 6 to 10 above the desk top,
+ * the monitor beside it, the bubble or the Zzz over the monitor, the name
+ * tag on the last two rows.
+ */
+function drawMiniStation(c: Canvas, x: number, y: number, seat: number, sceneAgent: SceneAgent | undefined, frame: number) {
+  const isManager = seat === 0
+  const w = DESKS.small.w
+  c.rect(x + 1, y + 5, 8, 6, CHAIR)
+  c.rect(x + 2, y + 5, 6, 1, CHAIR_LIGHT)
+  const agent = sceneAgent?.agent
+  const t = agent === undefined ? 0 : (frame + phaseOf(agent.id)) % FRAMES
+
+  if (sceneAgent !== undefined && agent !== undefined) {
+    let look: Look = 'open'
+    let arms: [number, number] = [0, 0]
+    let dy = 0
+    switch (agent.status) {
+      case 'working':
+        look = t === 5 ? 'closed' : 'right'
+        arms = t % 2 === 0 ? [1, 0] : [0, 1]
+        break
+      case 'waiting':
+        look = t < 3 ? 'open' : t < 5 ? 'left' : t < 6 ? 'open' : 'right'
+        break
+      case 'sleeping':
+        look = 'closed'
+        dy = t < 4 ? 0 : 1
+        break
+      case 'done':
+        look = 'happy'
+        arms = t % 4 < 2 ? [-1, -1] : [0, 0]
+        break
+      case 'failed':
+        look = 'dead'
+        arms = t % 2 === 0 ? [-1, 0] : [0, -1]
+        break
+    }
+    drawMiniCharacter(c, x + 1, y + 6 + dy, sceneAgent.style, look, arms, t)
+  }
+
+  // The desk, the keyboard on it, and the monitor at its right end.
+  c.rect(x, y + 11, w, 1, isManager ? 0x9c4a2c : 0xc68e5c)
+  c.rect(x, y + 12, w, 1, isManager ? 0x6b2c1a : 0x8f5d38)
+  c.rect(x, y + 13, w, 1, isManager ? 0x4e1f12 : 0x6e4529)
+  if (isManager) c.rect(x + 3, y + 12, 4, 1, RUG_EDGE)
+  c.rect(x + 2, y + 11, 6, 1, 0xe6e8ec)
+  c.rect(x + 10, y + 6, 5, 4, MONITOR)
+  c.set(x + 12, y + 10, MONITOR)
+  c.rect(x + 11, y + 11, 3, 1, MONITOR)
+  c.rect(x + 11, y + 7, 3, 2, SCREEN_OFF)
+
+  if (agent === undefined) {
+    // An empty desk keeps a plant for company.
+    c.rect(x + 1, y + 9, 2, 2, 0x9c5a3c)
+    c.set(x + 1, y + 8, INK.L!)
+    c.set(x + 2, y + 7, INK.l!)
+    return
+  }
+  drawMiniScreen(c, x + 11, y + 7, agent, t)
+
+  const bubble = (icon: IconName, step: number) => {
+    const bx = x + 10
+    c.rect(bx + 1, y, 3, 5, INK.W!)
+    c.rect(bx, y + 1, 5, 3, INK.W!)
+    c.set(bx - 1, y + 5, INK.W!)
+    const frames = MINI_ICONS[icon]
+    c.sprite(bx + 1, y + 1, frames[step % frames.length]!)
+  }
+  if (agent.status === 'working') bubble(iconFor(agent.tool), t)
+  if (agent.status === 'waiting') bubble('think', Math.floor(t / 2))
+  if (agent.status === 'sleeping') {
+    for (const offset of [0, 4]) {
+      const s = (t + offset) % FRAMES
+      if (s > 5) continue
+      c.sprite(x + 9 + Math.floor(s / 2), Math.max(y, y + 4 - s), s >= 3 ? MINI_BIG_Z : MINI_SMALL_Z)
+    }
+  }
+  if (agent.outcome === 'ok' && agent.status !== 'working') c.sprite(x, y + 1, MINI_CHECK)
+  if (agent.outcome === 'failed' && agent.status !== 'working') c.sprite(x + 1, y, MINI_BANG)
 }
 
 /** Seats sorted by number, each with the agent at it. */
@@ -479,10 +667,10 @@ export function seatsNeeded(agents: readonly SceneAgent[]): number {
 }
 
 /** Corner brackets around the desk being styled. */
-function drawHighlight(c: Canvas, x: number, y: number, t: number): void {
+function drawHighlight(c: Canvas, x: number, y: number, w: number, h: number, t: number): void {
   const color = t % 4 < 2 ? INK.Y! : INK.y!
-  const right = x + STATION_W - 1
-  const bottom = y + STATION_H - 1
+  const right = x + w - 1
+  const bottom = y + h - 1
   for (const [cx, cy, dx, dy] of [
     [x, y, 1, 1],
     [right, y, -1, 1],
@@ -500,13 +688,14 @@ export function drawScene(lay: Layout, agents: readonly SceneAgent[], frame: num
   drawWall(c, lay.wall)
   const bySeat = seatMap(agents)
   const manager = stationOrigin(lay, 0)
-  if (manager !== undefined) drawRug(c, manager.x, manager.y)
+  if (manager !== undefined) drawRug(c, manager.x, manager.y, lay.deskW, lay.deskH)
+  const draw = lay.art === 'small' ? drawMiniStation : drawStation
   for (let seat = 0; seat < lay.cells.length; seat++) {
     const origin = stationOrigin(lay, seat)
-    if (origin !== undefined) drawStation(c, origin.x, origin.y, seat, bySeat.get(seat), frame)
+    if (origin !== undefined) draw(c, origin.x, origin.y, seat, bySeat.get(seat), frame)
   }
   const highlight = highlightSeat === undefined ? undefined : stationOrigin(lay, highlightSeat)
-  if (highlight !== undefined) drawHighlight(c, highlight.x, highlight.y, frame % FRAMES)
+  if (highlight !== undefined) drawHighlight(c, highlight.x, highlight.y, lay.deskW, lay.deskH, frame % FRAMES)
 
   return c
 }
@@ -530,7 +719,7 @@ export function sceneLabels(lay: Layout, agents: readonly SceneAgent[], maxChars
     const origin = stationOrigin(lay, agent.seat)
     if (origin === undefined) continue
     const text = clip(agent.label, maxChars)
-    labels.push({ x: origin.x, y: origin.y + 20, width: STATION_W, text, color: statusColor(agent.status) })
+    labels.push({ x: origin.x, y: origin.y + lay.deskH - 2, width: lay.deskW, text, color: statusColor(agent.status) })
   }
 
   return labels
@@ -541,7 +730,7 @@ export function sceneHotspots(lay: Layout, agents: readonly SceneAgent[], descri
   for (const { agent } of agents) {
     const origin = stationOrigin(lay, agent.seat)
     if (origin === undefined) continue
-    spots.push({ ...origin, width: STATION_W, height: STATION_H, title: describe(agent) })
+    spots.push({ ...origin, width: lay.deskW, height: lay.deskH, title: describe(agent) })
   }
 
   return spots

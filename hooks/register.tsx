@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { AgentInfo, Elements, EngineInterface, Register, ToolCallInput } from 'claude-code'
 
-import type { AccessoryName, AgentStatus, AgentStyle, ColorName, FactoryAgent, HatName, LooksMode } from '../types'
+import type { AccessoryName, AgentSize, AgentStatus, AgentStyle, ColorName, FactoryAgent, HatName, LooksMode } from '../types'
 import {
   MAIN_ID,
   STYLE_CHOICES,
@@ -30,7 +30,6 @@ import {
 import { rasterCells, sceneSvg } from './paint'
 import {
   FRAMES,
-  STATION_W,
   clip,
   colsFor,
   drawScene,
@@ -50,13 +49,14 @@ const TICK_MS = 250
 const RECONCILE_MS = 2000
 /** Desks across on the remote surfaces, which scale the picture to fit. */
 const REMOTE_COLS = 7
-/** CSS pixels per picture pixel on the remote surfaces. */
-const REMOTE_SCALE = 3
+/** CSS pixels per picture pixel on the remote surfaces, by agent size. */
+const REMOTE_SCALE: Record<AgentSize, number> = { small: 2, large: 3 }
 
 const AGENTS = { plugin: 'agent-factory', key: 'agents' } as const
 const agentsAtom = atom(AGENTS, [])
 const stylesAtom = atom({ plugin: 'agent-factory', key: 'styles' } as const, {})
 const looksAtom = atom({ plugin: 'agent-factory', key: 'looks' } as const, 'random')
+const sizeAtom = atom({ plugin: 'agent-factory', key: 'size' } as const, 'small')
 const selectedAtom = atom({ plugin: 'agent-factory', key: 'selected' } as const, null)
 const scopeAtom = atom({ plugin: 'agent-factory', key: 'scope' } as const, 'agent')
 const demoAtom = atom({ plugin: 'agent-factory', key: 'isDemo' } as const, false)
@@ -70,7 +70,7 @@ type Wardrobe = { styles: Record<string, AgentStyle>; looks: LooksMode }
 /** The terminal picture's frame; a reload starts it over, which nobody sees. */
 let frame = 0
 /** The terminal Raster as last drawn, which the ticker repaints in place. */
-let mounted: { columns: number; rows: number; maxCols: number; isFlat: boolean } | null = null
+let mounted: { columns: number; rows: number; maxCols: number; isFlat: boolean; size: AgentSize } | null = null
 let isShown = true
 let isTicking = false
 /** The selected agent's id as last drawn, so the ticker highlights the same desk. */
@@ -187,8 +187,8 @@ async function tick($: Engine): Promise<void> {
     const agents = withMain(await read($, agentsAtom), 0)
     const scene = sceneOf(agents, await wardrobeOf($))
     const selected = agents.find(a => a.id === selectedId)
-    const lay = layout(seatsNeeded(scene), at.maxCols, { isFlat: at.isFlat, spacing: 'snug' })
-    const picture = rasterCells(drawScene(lay, scene, frame, selected?.seat), sceneLabels(lay, scene, STATION_W - 2))
+    const lay = layout(seatsNeeded(scene), at.maxCols, { isFlat: at.isFlat, spacing: 'snug', art: at.size })
+    const picture = rasterCells(drawScene(lay, scene, frame, selected?.seat), sceneLabels(lay, scene, lay.deskW - 2))
     if (picture.columns !== at.columns || picture.rows !== at.rows) return
     await $.ui.blit({ requestId: PANE, key: RASTER, cells: picture.cells, columns: picture.columns, rows: picture.rows })
   } finally {
@@ -297,6 +297,11 @@ async function setLooks($: Engine, looks: LooksMode): Promise<void> {
   await $.store.set('looks', looks)
 }
 
+async function setSize($: Engine, size: AgentSize): Promise<void> {
+  await update($, sizeAtom, () => size)
+  await $.store.set('size', size)
+}
+
 const STATUS_THEME: Record<AgentStatus, string> = {
   working: 'claude',
   waiting: 'warning',
@@ -386,6 +391,7 @@ function controls(
   { styles, looks }: Wardrobe,
   selected: FactoryAgent | undefined,
   scope: StyleScope,
+  size: AgentSize,
   width: number,
 ) {
   const { Box, Text, Button } = ui
@@ -453,6 +459,11 @@ function controls(
             label={looks === 'random' ? 'Undressed agents: random looks' : 'Undressed agents: looks by type'}
             onPress={() => setLooks($, looks === 'random' ? 'type' : 'random')}
           />
+          <Button
+            key="size"
+            label={size === 'small' ? 'Size: small' : 'Size: large'}
+            onPress={() => setSize($, size === 'small' ? 'large' : 'small')}
+          />
           {hasFinished && (
             <Button key="clear-finished" label="Send finished agents home" onPress={() => mutate($, list => clearFinished(list))} />
           )}
@@ -467,6 +478,7 @@ const HELP = [
   '/factory style <who> color=<c> hat=<h> extra=<e> — dress the manager (main), every agent of a type, or one agent by its name tag',
   '/factory reset [who] — back to the default looks',
   '/factory looks random|type — how agents nobody dressed look: each its own by lot, or dressed for their type',
+  '/factory size small|large — how big the agents are drawn',
   '/factory clear — send finished agents home',
   '/factory demo — add or remove pretend agents, to see the floor busy',
   '/factory options — list the colors, hats and extras',
@@ -526,6 +538,12 @@ async function runCommand($: Engine, args: string): Promise<string> {
       const target = targetOf(who, agents)
       await restyle($, target.agent, target.scope, () => null)
       return `${target.name}: back to the default look.`
+    }
+    case 'size': {
+      const size = words[1]?.toLowerCase()
+      if (size !== 'small' && size !== 'large') return 'Usage: /factory size small|large'
+      await setSize($, size)
+      return `The agents are drawn ${size} now.`
     }
     case 'looks': {
       const mode = words[1]?.toLowerCase()
@@ -598,6 +616,8 @@ export const register: Register = on => {
       if (isStyles(stored)) await update($, stylesAtom, current => ({ ...stored, ...current }))
       const looks = await $.store.get('looks')
       if (looks === 'random' || looks === 'type') await update($, looksAtom, () => looks)
+      const size = await $.store.get('size')
+      if (size === 'small' || size === 'large') await update($, sizeAtom, () => size)
       await mutate($, agents => agents)
     })
     await quietly($, 'command', () =>
@@ -673,6 +693,7 @@ export const register: Register = on => {
     const wardrobe = await wardrobeOf($)
     const picked = await read($, selectedAtom)
     const scope = await read($, scopeAtom)
+    const size = await read($, sizeAtom)
     const selected = agents.find(a => a.id === picked)
     selectedId = selected?.id ?? null
     const scene = sceneOf(agents, wardrobe)
@@ -683,15 +704,15 @@ export const register: Register = on => {
       const ui = $.ui.resolve(e)
       const { Box, Raster } = ui
       const isFlat = e.props.placement === 'inline'
-      const maxCols = colsFor(width, 'snug')
-      const lay = layout(seats, maxCols, { isFlat, spacing: 'snug' })
-      const picture = rasterCells(drawScene(lay, scene, frame, selected?.seat), sceneLabels(lay, scene, STATION_W - 2))
-      mounted = { columns: picture.columns, rows: picture.rows, maxCols, isFlat }
+      const maxCols = colsFor(width, 'snug', size)
+      const lay = layout(seats, maxCols, { isFlat, spacing: 'snug', art: size })
+      const picture = rasterCells(drawScene(lay, scene, frame, selected?.seat), sceneLabels(lay, scene, lay.deskW - 2))
+      mounted = { columns: picture.columns, rows: picture.rows, maxCols, isFlat, size }
 
       return (
         <Box flexDirection="column">
           <Raster key={RASTER} columns={picture.columns} rows={picture.rows} cells={picture.cells} />
-          {controls($, ui, agents, wardrobe, selected, scope, width)}
+          {controls($, ui, agents, wardrobe, selected, scope, size, width)}
         </Box>
       )
     }
@@ -704,14 +725,14 @@ export const register: Register = on => {
     const lay = layout(seats, REMOTE_COLS, { spacing: 'roomy' })
     const frames = Array.from({ length: FRAMES }, (_, f) => drawScene(lay, scene, f, selected?.seat))
     const source = sceneSvg(frames, sceneLabels(lay, scene, 10), sceneHotspots(lay, scene, describeAgent), {
-      scale: REMOTE_SCALE,
+      scale: REMOTE_SCALE[size],
       secondsPerFrame: TICK_MS / 1000,
     })
 
     return (
       <Box flexDirection="column" rowGap={1}>
         <Svg source={source} alt={altText(agents)} isInteractive />
-        {controls($, table, agents, wardrobe, selected, scope, width)}
+        {controls($, table, agents, wardrobe, selected, scope, size, width)}
       </Box>
     )
   })

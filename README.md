@@ -29,9 +29,11 @@ The manager dozes off 90 seconds after the last turn ends; a finished subagent c
 first; when 24 are taken, the agent that finished longest ago goes home to make room.
 
 The terminal draws the floor with half-block characters, two pixels a cell, repainted four
-times a second. Claude Code Desktop and the mobile app draw it as an animated SVG, three
-CSS pixels to a picture pixel with room between the desks; hover a desk there for what
-that agent is doing.
+times a second. There every pixel takes a whole cell, so the terminal has a small set of
+pictures of its own: the same mascot, hats and extras on desks two thirds the size (agents
+8 cells wide instead of 12). Claude Code Desktop and the mobile app draw the floor as an
+animated SVG with room between the desks; hover a desk there for what that agent is doing.
+**Size** under the legend, or `/factory size`, switches between small and large.
 
 ## Using it
 
@@ -44,9 +46,10 @@ agent. Pick one to dress it up:
 - **Random** draws a new look, **Reset** takes the choice back, **Transcript** opens that
   subagent's transcript.
 
-Below the legend, **Undressed agents** switches between random looks and looks by type.
-Looks chosen for the manager and for types, and that switch, are remembered across
-sessions; a look chosen for one agent lasts as long as that agent.
+Below the legend, **Undressed agents** switches between random looks and looks by type, and
+**Size** between small and large agents. Looks chosen for the manager and for types, and
+both switches, are remembered across sessions; a look chosen for one agent lasts as long as
+that agent.
 
 | Command | Does |
 | --- | --- |
@@ -54,6 +57,7 @@ sessions; a look chosen for one agent lasts as long as that agent.
 | `/factory style <who> color=<c> hat=<h> extra=<e>` | dress the manager (`main`), every agent of a type (`Explore`, `Plan`, ...), or one agent by its name tag |
 | `/factory reset [who]` | back to the default looks |
 | `/factory looks random\|type` | how agents nobody dressed look: each its own by lot, or dressed for their type |
+| `/factory size small\|large` | how big the agents are drawn (small by default) |
 | `/factory clear` | send finished agents home |
 | `/factory demo` | add (or remove) six pretend agents, to see a busy floor |
 | `/factory options` | list the colors, hats and extras |
@@ -71,6 +75,7 @@ sessions; a look chosen for one agent lasts as long as that agent.
 | `hooks/model.ts` | agents, desks, status changes and styles, as plain functions |
 | `hooks/scene.ts` | the floor plan and the pixel painter |
 | `hooks/sprites.ts` | colors, hats, extras and icons, drawn as strings |
+| `hooks/minis.ts` | the same hats, extras and icons for the small desks |
 | `hooks/paint.ts` | the picture as terminal cells, and as an SVG with its frames |
 | `types/index.d.ts` | the shape of the mod's state |
 | `tests/factory.test.ts` | the floor plan, the agents, the session and the pane |
