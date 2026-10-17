@@ -14,11 +14,11 @@ export type FactoryAgent = {
   status: AgentStatus
   /** How its last task ended, kept after it dozes off: a badge over its head. */
   outcome: 'ok' | 'failed' | null
-  /** The tool the agent runs right now, if any. */
+  /** The tool the agent runs, or ran last while it keeps working; null before its first. */
   tool: string | null
   /** A few words on what the tool works on (a file, a command, a query). */
   detail: string | null
-  /** The `tool_use_id` of the tool shown, so only its own end clears it. */
+  /** The `tool_use_id` of the tool while it runs, so only its own end marks it ended. */
   toolId: string | null
   /** Epoch milliseconds of the last status change. */
   since: number

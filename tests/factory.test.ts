@@ -1,4 +1,4 @@
-import { describe, expect, mock, test } from 'claude-code/testing'
+import { describe, expect, mock, test, type MockClock } from 'claude-code/testing'
 import type { AgentInfo, On } from 'claude-code'
 
 import type { FactoryAgent } from '../types'
@@ -6,6 +6,7 @@ import {
   addAgent,
   clearFinished,
   defaultStyle,
+  labelFor,
   mainAgent,
   parseStyle,
   randomStyle,
@@ -158,19 +159,30 @@ describe('the agents', () => {
     expect(styleOf(one, { 'type:Explore': chef, 'agent:agent-1': viking })).toEqual(viking)
   })
 
+  test("a desk's name tag is the agent's name, else its own type, else its task", () => {
+    expect(labelFor('scout', 'Map the repository', 'Explore')).toBe('scout')
+    expect(labelFor(undefined, 'Put the prologue in', 'story')).toBe('story')
+    expect(labelFor(undefined, 'Run the suite', 'my-plugin:runner')).toBe('runner')
+    expect(labelFor(undefined, 'Map the repository', 'Explore')).toBe('Map repository')
+    expect(labelFor(undefined, '', 'general-purpose')).toBe('general-purpose')
+  })
+
   test('style words parse, and an unknown one is named', () => {
     expect(parseStyle(['color=sky', 'hat=crown', 'extra=tie'])).toEqual({ change: { color: 'sky', hat: 'crown', accessory: 'tie' } })
     expect(parseStyle(['hat=sombrero'])).toEqual({ error: 'hat=sombrero' })
   })
 })
 
-/** The engine beneath the plugins: the agent list, and turns that just end. */
-function engine(on: On, agents: AgentInfo[]): void {
-  mock.clock(on, { now: 1000 })
+/** The engine beneath the plugins: the agent list, and sessions and turns that just go by. */
+function engine(on: On, agents: AgentInfo[]): MockClock {
+  const clock = mock.clock(on, { now: 1000 })
   mock.store(on)
   on('agent.list', () => ({ value: agents }))
+  on('session.start', ($, e) => ({ cwd: e.cwd }))
   on('turn.start', ($, e) => ({ turnId: e.turnId }))
   on('turn.complete', ($, e) => ({ text: e.answer }))
+
+  return clock
 }
 
 /** `/factory-view <args>` typed at the prompt. */
@@ -202,7 +214,7 @@ describe('the session', () => {
     await ui.unmount()
   })
 
-  test('a tool call shows on the agent while it runs and clears after', async ($, on) => {
+  test('a tool call shows on the agent while it runs, and stays as its last one after', async ($, on) => {
     engine(on, [])
     let during: string | undefined
     let read = async (): Promise<string | undefined> => undefined
@@ -214,7 +226,22 @@ describe('the session', () => {
     read = () => legendLine(ui, 'main')
     await $.tool.call({ tool: 'Read', file_path: '/repo/src/parser.ts' })
     expect(during).toContain('Read: parser.ts')
-    expect(await legendLine(ui, 'main')).toContain('thinking')
+    expect(await legendLine(ui, 'main')).toContain('Read: parser.ts')
+    await ui.unmount()
+  })
+
+  test('an agent of your own type is named by it, and a name it gets later replaces that', async ($, on) => {
+    const agents: AgentInfo[] = [{ id: 'agent-2', description: 'Put the prologue in', type: 'story', status: 'running' }]
+    const clock = engine(on, agents)
+    await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true })
+    const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+    await $.turn.start({ text: 'Write it', turnId: 't1', agentId: 'agent-2' })
+    expect(await legendLine(ui, 'agent-2')).toContain('story')
+    expect(await legendLine(ui, 'agent-2')).not.toContain('Put prologue')
+
+    agents[0] = { ...agents[0]!, name: 'narrator' }
+    await clock.advance(2000)
+    expect(await legendLine(ui, 'agent-2')).toContain('narrator')
     await ui.unmount()
   })
 

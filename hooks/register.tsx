@@ -158,6 +158,10 @@ async function reconcile($: Engine): Promise<void> {
         if (status === 'working' || status === 'waiting') next = addAgent(next, newAgentFrom(info), now)
         continue
       }
+      const label = labelFor(info.name, info.description, info.type)
+      if (mine.label !== label || mine.type !== info.type || mine.description !== info.description) {
+        next = patchAgent(next, mine.id, a => ({ ...a, label, type: info.type, description: info.description }))
+      }
       const isFresh = now - mine.since < 5000
       const isEnded = status === 'done' || status === 'failed'
       const isMineEnded = mine.status === 'done' || mine.status === 'failed' || mine.status === 'sleeping'

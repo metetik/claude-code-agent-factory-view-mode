@@ -62,9 +62,11 @@ The manager dozes off 90 seconds after the last turn ends; a finished subagent c
 seconds, then naps at its desk. Desks fill nearest the manager first, ringing outward; when
 24 are taken, the agent that finished longest ago goes home to make room.
 
-Under the floor, a legend lists every agent with what it is doing right now, the tool and
-what it works on (`Grep: TODO`, `Edit: parser.ts`). In the desktop and mobile apps, hover a
-desk for the same.
+Each desk wears a name tag: the agent's name when Claude gave it one, else its type when it
+is one of your own agents (`code-reviewer`, `story`), else the first words of its task.
+Under the floor, a legend lists every agent with the tool it runs, or ran last, and what it
+works on (`Grep: TODO`, `Edit: parser.ts`). In the desktop and mobile apps, hover a desk for
+the same.
 
 ## 📏 Three sizes
 

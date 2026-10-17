@@ -1,7 +1,7 @@
 {
   "name": "factory-view",
   "displayName": "Factory View",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A pixel-art office for Claude Code: watch Claude and its subagents work at their desks, and dress them up.",
   "author": {
     "name": "metetik",

@@ -95,8 +95,9 @@ export function startTool(agent: FactoryAgent, tool: string, toolId: string, det
   return { ...setStatus(agent, 'working', now), tool, toolId, detail, toolCount: agent.toolCount + 1 }
 }
 
+/** A tool that ended stays on show as the agent's last one, until the next starts or the agent stops working. */
 export function endTool(agent: FactoryAgent, toolId: string): FactoryAgent {
-  return agent.toolId === toolId ? { ...agent, tool: null, toolId: null, detail: null } : agent
+  return agent.toolId === toolId ? { ...agent, toolId: null } : agent
 }
 
 /** Moves on whoever has waited, cheered or idled long enough; null when nobody moved. */
@@ -272,9 +273,27 @@ function hostOf(url: string | undefined): string | undefined {
   }
 }
 
-/** The name on a subagent's desk: its call name, else the first words of its task that say something, else its type. */
+/** The agent types Claude Code ships with: they say little about one agent, so its task names it instead. */
+const BUILT_IN_TYPES = new Set([
+  'general-purpose',
+  'Explore',
+  'Plan',
+  'fork',
+  'teammate',
+  'statusline-setup',
+  'claude-code-guide',
+  'output-style-setup',
+])
+
+/**
+ * The name on a subagent's desk: its call name, else its type when it is one
+ * of your own agents (a plugin's without the plugin), else the first words of
+ * its task that say something, else its type.
+ */
 export function labelFor(name: string | undefined, description: string, type: string): string {
   if (name !== undefined && name !== '') return name
+  const own = type.slice(type.lastIndexOf(':') + 1)
+  if (own !== '' && !BUILT_IN_TYPES.has(type)) return own
   const words = description
     .trim()
     .split(/\s+/)
